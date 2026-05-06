@@ -809,13 +809,13 @@ function renderLogs(logs = []) {
     .map(
       (item) => `
         <tr title="${escapeHtml(item.answer)}">
-          <td>${item.id}</td>
-          <td>${escapeHtml(item.user_id)}</td>
-          <td>${escapeHtml(item.question)}</td>
-          <td>${escapeHtml(item.emotion)}</td>
-          <td>${item.satisfaction ?? "-"}</td>
-          <td>${Number(item.response_seconds || 0).toFixed(2)}s</td>
-          <td>${formatTime(item.created_at)}</td>
+          <td data-label="ID">${item.id}</td>
+          <td data-label="用户">${escapeHtml(item.user_id)}</td>
+          <td data-label="问题">${escapeHtml(item.question)}</td>
+          <td data-label="情绪">${escapeHtml(item.emotion)}</td>
+          <td data-label="评分">${item.satisfaction ?? "-"}</td>
+          <td data-label="耗时">${Number(item.response_seconds || 0).toFixed(2)}s</td>
+          <td data-label="时间">${formatTime(item.created_at)}</td>
         </tr>
       `
     )
