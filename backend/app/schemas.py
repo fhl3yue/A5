@@ -52,6 +52,74 @@ class SimpleResponse(BaseModel):
     message: str = "success"
 
 
+class KnowledgeDocumentItem(BaseModel):
+    id: int
+    name: str
+    source: str
+    status: str
+    content_type: str
+    chunk_count: int
+    created_at: datetime
+
+
+class KnowledgeChunkItem(BaseModel):
+    id: int
+    title: str
+    content: str
+    tags: str
+    created_at: datetime
+
+
+class KnowledgeDocumentDetailData(BaseModel):
+    document: KnowledgeDocumentItem
+    chunks: list[KnowledgeChunkItem]
+
+
+class KnowledgeDocumentsResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: list[KnowledgeDocumentItem]
+
+
+class KnowledgeDocumentDetailResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: KnowledgeDocumentDetailData
+
+
+class KnowledgeDocumentUpdateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    source: str = Field(default="admin", max_length=255)
+    status: str = Field(default="active", max_length=50)
+
+
+class KnowledgeChunkCreateRequest(BaseModel):
+    title: str = Field(default="", max_length=255)
+    content: str = Field(min_length=1, max_length=3000)
+    tags: str = Field(default="manual", max_length=255)
+
+
+class KnowledgeChunkUpdateRequest(BaseModel):
+    title: str = Field(default="", max_length=255)
+    content: str = Field(min_length=1, max_length=3000)
+    tags: str = Field(default="", max_length=255)
+
+
+class DigitalHumanConfigData(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    role_title: str = Field(min_length=1, max_length=100)
+    scenic_area: str = Field(min_length=1, max_length=100)
+    outfit_theme: str = Field(min_length=1, max_length=50)
+    voice_name: str = Field(min_length=1, max_length=100)
+    greeting: str = Field(min_length=1, max_length=300)
+
+
+class DigitalHumanConfigResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: DigitalHumanConfigData
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -97,15 +165,49 @@ class HotQuestionItem(BaseModel):
     count: int
 
 
+class ServiceTrendItem(BaseModel):
+    date: str
+    visitors: int = 0
+    qa_count: int = 0
+
+
+class SatisfactionTrendItem(BaseModel):
+    date: str
+    satisfaction_rate: float = 0.0
+    rating_count: int = 0
+
+
 class DashboardData(BaseModel):
     today_visitors: int
     today_qa_count: int
     satisfaction_rate: float
     hot_questions: list[HotQuestionItem]
     emotion_distribution: list[ChartItem]
+    weekly_service_trend: list[ServiceTrendItem]
+    satisfaction_trend: list[SatisfactionTrendItem]
 
 
 class DashboardResponse(BaseModel):
     code: int = 0
     message: str = "success"
     data: DashboardData
+
+
+class EmotionTrendItem(BaseModel):
+    date: str
+    positive: int = 0
+    neutral: int = 0
+    negative: int = 0
+
+
+class VisitorReportData(BaseModel):
+    summary: str
+    focus_points: list[HotQuestionItem]
+    emotion_trend: list[EmotionTrendItem]
+    service_suggestions: list[str]
+
+
+class VisitorReportResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: VisitorReportData

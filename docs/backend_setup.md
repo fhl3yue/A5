@@ -32,6 +32,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --app-dir D:\software\b
 powershell -ExecutionPolicy Bypass -File D:\software\start_backend.ps1
 ```
 
+启动成功后可以访问：
+
+- 前端演示页面：`http://127.0.0.1:8000/app/`
+- 接口文档页面：`http://127.0.0.1:8000/docs`
+
+当前前端页面由后端直接托管，因此不需要单独启动 Vue、React 或 Vite 服务。
+
 首次使用语音识别时，`faster-whisper` 会自动下载对应模型，默认配置为 CPU 上的 `base` 模型，首次加载会稍慢，后续会复用缓存。
 
 如果你们后期觉得识别不够准，可优先尝试两种方式：

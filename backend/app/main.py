@@ -4,19 +4,30 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import ensure_runtime_dirs, settings
 from app.database import Base, engine, get_db
-from app.models import AdminUser, QALog
+from app.models import AdminUser, KnowledgeChunk, KnowledgeDocument, QALog
 from app.schemas import (
     ChatData,
     ChatRequest,
     ChatResponse,
     DashboardResponse,
+    DigitalHumanConfigData,
+    DigitalHumanConfigResponse,
     FeedbackRequest,
+    KnowledgeChunkCreateRequest,
+    KnowledgeChunkItem,
+    KnowledgeChunkUpdateRequest,
+    KnowledgeDocumentDetailData,
+    KnowledgeDocumentDetailResponse,
+    KnowledgeDocumentItem,
+    KnowledgeDocumentsResponse,
+    KnowledgeDocumentUpdateRequest,
     LoginData,
     LoginRequest,
     LoginResponse,
@@ -26,9 +37,11 @@ from app.schemas import (
     RouteRequest,
     RouteResponse,
     SimpleResponse,
+    VisitorReportResponse,
 )
-from app.services.analytics import build_dashboard
+from app.services.analytics import build_dashboard, build_visitor_report
 from app.services.chat import answer_question
+from app.services.digital_human import get_or_create_config, serialize_config, update_config
 from app.services.knowledge import import_docx_document, import_plain_text_document, import_xlsx_rows
 from app.services.routes import recommend_route
 from app.services.speech import transcribe_audio_file
@@ -47,14 +60,96 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/generated/audio", StaticFiles(directory=settings.audio_output_dir), name="generated-audio")
+frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
+if frontend_dir.exists():
+    app.mount("/app", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+
+
+def document_to_item(db: Session, document: KnowledgeDocument) -> KnowledgeDocumentItem:
+    chunk_count = db.execute(
+        select(func.count()).select_from(KnowledgeChunk).where(KnowledgeChunk.document_name == document.name)
+    ).scalar_one()
+    return KnowledgeDocumentItem(
+        id=document.id,
+        name=document.name,
+        source=document.source,
+        status=document.status,
+        content_type=document.content_type,
+        chunk_count=chunk_count,
+        created_at=document.created_at,
+    )
+
+
+def chunk_to_item(chunk: KnowledgeChunk) -> KnowledgeChunkItem:
+    return KnowledgeChunkItem(
+        id=chunk.id,
+        title=chunk.title,
+        content=chunk.content,
+        tags=chunk.tags,
+        created_at=chunk.created_at,
+    )
+
+
+def get_document_or_404(db: Session, document_id: int) -> KnowledgeDocument:
+    document = db.get(KnowledgeDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="未找到对应知识文档。")
+    return document
+
+
+def get_chunk_or_404(db: Session, chunk_id: int) -> KnowledgeChunk:
+    chunk = db.get(KnowledgeChunk, chunk_id)
+    if chunk is None:
+        raise HTTPException(status_code=404, detail="未找到对应知识片段。")
+    return chunk
+
+
+def document_detail_response(db: Session, document: KnowledgeDocument) -> KnowledgeDocumentDetailResponse:
+    chunks = db.execute(
+        select(KnowledgeChunk).where(KnowledgeChunk.document_name == document.name).order_by(KnowledgeChunk.id)
+    ).scalars().all()
+    return KnowledgeDocumentDetailResponse(
+        data=KnowledgeDocumentDetailData(
+            document=document_to_item(db, document),
+            chunks=[chunk_to_item(chunk) for chunk in chunks],
+        )
+    )
+
+
+def import_document_by_suffix(db: Session, path: Path, source: str = "upload") -> int:
+    suffix = path.suffix.lower()
+    if suffix in {".txt", ".md"}:
+        return import_plain_text_document(db, path, source=source)
+    if suffix == ".docx":
+        return import_docx_document(db, path, source=source)
+    if suffix == ".xlsx":
+        return import_xlsx_rows(db, path, source=source)
+    raise HTTPException(status_code=400, detail="当前仅支持 .txt/.md/.docx/.xlsx 文件。")
 
 
 @app.get("/")
 def root():
+    if frontend_dir.exists():
+        return RedirectResponse(url="/app/")
     return {
         "app": settings.app_name,
         "status": "ok",
         "docs": "/docs",
+    }
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
+
+
+@app.get("/api/health")
+def health():
+    return {
+        "app": settings.app_name,
+        "status": "ok",
+        "docs": "/docs",
+        "frontend": "/app/" if frontend_dir.exists() else None,
     }
 
 
@@ -124,6 +219,12 @@ def route_recommend(payload: RouteRequest, db: Session = Depends(get_db)):
     return RouteResponse(data=RouteData(**route))
 
 
+@app.get("/api/digital-human/config", response_model=DigitalHumanConfigResponse)
+def get_digital_human_config(db: Session = Depends(get_db)):
+    config = get_or_create_config(db)
+    return DigitalHumanConfigResponse(data=DigitalHumanConfigData(**serialize_config(config)))
+
+
 @app.post("/api/feedback", response_model=SimpleResponse)
 def submit_feedback(payload: FeedbackRequest, db: Session = Depends(get_db)):
     log = db.get(QALog, payload.log_id)
@@ -167,19 +268,123 @@ def admin_dashboard(db: Session = Depends(get_db)):
     return DashboardResponse(data=build_dashboard(db))
 
 
+@app.get("/api/admin/visitor-report", response_model=VisitorReportResponse)
+def admin_visitor_report(db: Session = Depends(get_db)):
+    return VisitorReportResponse(data=build_visitor_report(db))
+
+
+@app.post("/api/admin/digital-human/config", response_model=DigitalHumanConfigResponse)
+def update_digital_human_config(payload: DigitalHumanConfigData, db: Session = Depends(get_db)):
+    config = update_config(db, payload.model_dump())
+    return DigitalHumanConfigResponse(data=DigitalHumanConfigData(**serialize_config(config)))
+
+
+@app.get("/api/admin/docs", response_model=KnowledgeDocumentsResponse)
+def list_documents(db: Session = Depends(get_db)):
+    documents = db.execute(select(KnowledgeDocument).order_by(desc(KnowledgeDocument.created_at))).scalars().all()
+    return KnowledgeDocumentsResponse(data=[document_to_item(db, document) for document in documents])
+
+
 @app.post("/api/admin/docs/upload", response_model=SimpleResponse)
 def upload_doc(file: UploadFile = File(...), db: Session = Depends(get_db)):
     destination = settings.raw_data_dir / file.filename
     with destination.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    suffix = Path(file.filename).suffix.lower()
-    if suffix in {".txt", ".md"}:
-        import_plain_text_document(db, destination, source="upload")
-    elif suffix == ".docx":
-        import_docx_document(db, destination, source="upload")
-    elif suffix == ".xlsx":
-        import_xlsx_rows(db, destination, source="upload")
-    else:
-        raise HTTPException(status_code=400, detail="当前仅支持 .txt/.md/.docx/.xlsx 文件。")
+    import_document_by_suffix(db, destination, source="upload")
     return SimpleResponse()
+
+
+@app.get("/api/admin/docs/{document_id}", response_model=KnowledgeDocumentDetailResponse)
+def get_document_detail(document_id: int, db: Session = Depends(get_db)):
+    document = get_document_or_404(db, document_id)
+    return document_detail_response(db, document)
+
+
+@app.patch("/api/admin/docs/{document_id}", response_model=KnowledgeDocumentDetailResponse)
+def update_document_meta(document_id: int, payload: KnowledgeDocumentUpdateRequest, db: Session = Depends(get_db)):
+    document = get_document_or_404(db, document_id)
+    next_name = payload.name.strip()
+    existing = db.execute(
+        select(KnowledgeDocument).where(KnowledgeDocument.name == next_name, KnowledgeDocument.id != document_id)
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="已存在同名知识文档。")
+
+    old_name = document.name
+    document.name = next_name
+    document.source = payload.source.strip() or "admin"
+    document.status = payload.status.strip() or "active"
+    if old_name != next_name:
+        db.execute(
+            update(KnowledgeChunk).where(KnowledgeChunk.document_name == old_name).values(document_name=next_name)
+        )
+    db.commit()
+    db.refresh(document)
+    return document_detail_response(db, document)
+
+
+@app.delete("/api/admin/docs/{document_id}", response_model=SimpleResponse)
+def delete_document(document_id: int, db: Session = Depends(get_db)):
+    document = get_document_or_404(db, document_id)
+    db.execute(
+        update(KnowledgeChunk)
+        .where(KnowledgeChunk.document_name == document.name)
+        .values(document_name=f"deleted:{document.name}")
+    )
+    db.query(KnowledgeChunk).filter(KnowledgeChunk.document_name == f"deleted:{document.name}").delete()
+    db.delete(document)
+    db.commit()
+    return SimpleResponse()
+
+
+@app.post("/api/admin/docs/{document_id}/reimport", response_model=KnowledgeDocumentDetailResponse)
+def reimport_document(document_id: int, db: Session = Depends(get_db)):
+    document = get_document_or_404(db, document_id)
+    source_path = settings.raw_data_dir / document.name
+    if not source_path.exists():
+        raise HTTPException(status_code=404, detail="未找到原始上传文件，无法重新导入。")
+    import_document_by_suffix(db, source_path, source="reimport")
+    refreshed = db.execute(select(KnowledgeDocument).where(KnowledgeDocument.name == source_path.name)).scalar_one()
+    return document_detail_response(db, refreshed)
+
+
+@app.post("/api/admin/docs/{document_id}/chunks", response_model=KnowledgeDocumentDetailResponse)
+def create_document_chunk(document_id: int, payload: KnowledgeChunkCreateRequest, db: Session = Depends(get_db)):
+    document = get_document_or_404(db, document_id)
+    db.add(
+        KnowledgeChunk(
+            document_name=document.name,
+            title=payload.title.strip() or payload.content.strip()[:24],
+            content=payload.content.strip(),
+            tags=payload.tags.strip() or "manual",
+        )
+    )
+    db.commit()
+    return document_detail_response(db, document)
+
+
+@app.patch("/api/admin/docs/chunks/{chunk_id}", response_model=KnowledgeDocumentDetailResponse)
+def update_document_chunk(chunk_id: int, payload: KnowledgeChunkUpdateRequest, db: Session = Depends(get_db)):
+    chunk = get_chunk_or_404(db, chunk_id)
+    document = db.execute(select(KnowledgeDocument).where(KnowledgeDocument.name == chunk.document_name)).scalar_one_or_none()
+    if document is None:
+        raise HTTPException(status_code=404, detail="知识片段缺少所属文档。")
+    chunk.title = payload.title.strip() or payload.content.strip()[:24]
+    chunk.content = payload.content.strip()
+    chunk.tags = payload.tags.strip()
+    db.commit()
+    db.refresh(document)
+    return document_detail_response(db, document)
+
+
+@app.delete("/api/admin/docs/chunks/{chunk_id}", response_model=KnowledgeDocumentDetailResponse)
+def delete_document_chunk(chunk_id: int, db: Session = Depends(get_db)):
+    chunk = get_chunk_or_404(db, chunk_id)
+    document = db.execute(select(KnowledgeDocument).where(KnowledgeDocument.name == chunk.document_name)).scalar_one_or_none()
+    if document is None:
+        raise HTTPException(status_code=404, detail="知识片段缺少所属文档。")
+    db.delete(chunk)
+    db.commit()
+    db.refresh(document)
+    return document_detail_response(db, document)

@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>灵山胜境 AI 数字人导览</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">灵</span>
+          <div>
+            <p class="eyebrow">Scenic AI Guide</p>
+            <h1>景区导览 AI 数字人</h1>
+          </div>
+        </div>
+        <nav class="view-tabs" aria-label="主功能切换">
+          <button class="tab-button active" data-view="visitorView" type="button">游客端</button>
+          <button class="tab-button" data-view="adminView" type="button">管理端</button>
+          <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">开发文档</a>
+        </nav>
+      </header>
+
+      <main>
+        <section id="visitorView" class="view active">
+          <div class="hero-band">
+            <section class="guide-stage" aria-label="数字人导览展示区">
+              <div class="scene-chip">当前示范景区：灵山胜境</div>
+              <div class="avatar-frame pet-frame" id="avatarFrame">
+                <div class="pet-orbit"></div>
+                <div class="pet-speech" id="petSpeech">景区导览中</div>
+                <svg class="pet-character ling-character live2d-character" viewBox="0 0 420 540" role="img" aria-label="灵灵，Live2D 风格景区 AI 导览员">
+                  <defs>
+                    <linearGradient id="idolSkinGradient" x1="150" x2="255" y1="92" y2="230" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#fff5e8" />
+                      <stop offset="1" stop-color="#ffd6bd" />
+                    </linearGradient>
+                    <linearGradient id="idolHairGradient" x1="96" x2="304" y1="42" y2="235" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#102f3a" />
+                      <stop offset="0.45" stop-color="#0d695d" />
+                      <stop offset="1" stop-color="#052926" />
+                    </linearGradient>
+                    <linearGradient id="idolHairGlow" x1="126" x2="286" y1="70" y2="190" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#65dfbc" stop-opacity="0.82" />
+                      <stop offset="1" stop-color="#12745c" stop-opacity="0" />
+                    </linearGradient>
+                    <linearGradient id="idolRobeGradient" x1="135" x2="285" y1="248" y2="430" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#18a177" />
+                      <stop offset="1" stop-color="#0b4b42" />
+                    </linearGradient>
+                    <linearGradient id="idolSleeveGradient" x1="82" x2="338" y1="248" y2="360" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#e8fff7" stop-opacity="0.92" />
+                      <stop offset="0.52" stop-color="#bfeede" stop-opacity="0.62" />
+                      <stop offset="1" stop-color="#dceffd" stop-opacity="0.86" />
+                    </linearGradient>
+                    <linearGradient id="idolGoldGradient" x1="128" x2="295" y1="282" y2="342" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#fff0a8" />
+                      <stop offset="1" stop-color="#f0b33c" />
+                    </linearGradient>
+                    <radialGradient id="idolEyeGradient" cx="45%" cy="40%" r="70%">
+                      <stop offset="0" stop-color="#79ffe4" />
+                      <stop offset="0.55" stop-color="#12866f" />
+                      <stop offset="1" stop-color="#063832" />
+                    </radialGradient>
+                    <filter id="idolShadow" x="-30%" y="-30%" width="160%" height="180%">
+                      <feDropShadow dx="0" dy="20" stdDeviation="18" flood-color="#0d4f3c" flood-opacity="0.22" />
+                    </filter>
+                    <filter id="idolGlowFilter" x="-80%" y="-80%" width="260%" height="260%">
+                      <feGaussianBlur stdDeviation="4" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+
+                  <ellipse class="ling-ground" cx="210" cy="493" rx="112" ry="22" fill="#0d4f3c" opacity="0.16" />
+
+                  <g class="live2d-root ling-float" filter="url(#idolShadow)">
+                    <g class="live2d-aura" filter="url(#idolGlowFilter)">
+                      <circle cx="116" cy="170" r="7" fill="#9df4d4" opacity="0.78" />
+                      <circle cx="315" cy="172" r="5" fill="#f7d36b" opacity="0.72" />
+                      <circle cx="318" cy="285" r="8" fill="#8ed2ff" opacity="0.55" />
+                    </g>
+
+                    <g class="live2d-hair-back">
+                      <path class="live2d-hair-tail live2d-hair-tail-left" d="M143 128 C90 154 67 236 89 332 C108 416 67 447 45 484 C120 480 154 418 147 339 C141 265 160 203 190 168 Z" fill="url(#idolHairGradient)" />
+                      <path class="live2d-hair-tail live2d-hair-tail-right" d="M278 128 C332 156 356 238 333 334 C314 418 354 449 376 484 C302 480 266 417 274 339 C280 265 261 203 231 168 Z" fill="url(#idolHairGradient)" />
+                      <path d="M93 276 C122 312 152 316 173 288 C153 363 111 381 76 346 Z" fill="#073c35" opacity="0.74" />
+                      <path d="M327 276 C298 313 268 316 247 288 C267 363 310 382 345 346 Z" fill="#073c35" opacity="0.74" />
+                    </g>
+
+                    <path class="ling-ribbon ling-ribbon-left live2d-sleeve-left" d="M137 270 C83 292 66 356 96 390 C122 420 161 397 156 351 C153 314 166 291 191 279 Z" fill="url(#idolSleeveGradient)" />
+                    <path class="ling-ribbon ling-ribbon-right live2d-sleeve-right" d="M281 269 C335 291 354 356 324 391 C297 421 259 398 264 351 C267 314 253 291 228 279 Z" fill="url(#idolSleeveGradient)" />
+
+                    <g class="live2d-legs">
+                      <path d="M174 396 H199 V488 H164 C160 456 163 424 174 396 Z" fill="#113b35" />
+                      <path d="M221 396 H247 C257 424 260 456 256 488 H221 Z" fill="#113b35" />
+                      <path d="M145 486 H202 C207 500 198 508 178 508 H147 C135 508 132 494 145 486 Z" fill="#092a28" />
+                      <path d="M218 486 H276 C289 494 285 508 273 508 H242 C222 508 213 500 218 486 Z" fill="#092a28" />
+                    </g>
+
+                    <g class="ling-body-core live2d-body">
+                      <path class="ling-robe-fill live2d-robe" d="M143 257 C163 231 259 231 278 257 C303 291 301 384 271 427 C248 459 170 459 147 427 C117 384 118 292 143 257 Z" fill="url(#idolRobeGradient)" />
+                      <path d="M158 247 C177 267 244 267 262 247 C249 233 171 233 158 247 Z" fill="#fff8e9" />
+                      <path class="ling-sash-fill live2d-sash" d="M127 330 C174 311 225 284 291 236 L306 267 C249 315 189 349 132 361 Z" fill="url(#idolGoldGradient)" opacity="0.96" />
+                      <path d="M150 407 C184 426 239 426 271 407 V435 C245 459 174 459 150 435 Z" fill="#07392f" opacity="0.32" />
+                      <path class="live2d-skirt-line" d="M164 287 C178 331 174 383 162 421 M210 280 C210 332 210 385 210 433 M256 287 C242 331 246 383 258 421" fill="none" stroke="#c5f0dc" stroke-width="3" stroke-linecap="round" opacity="0.58" />
+                      <rect class="ling-badge-fill live2d-badge" x="254" y="361" width="52" height="42" rx="12" fill="#2f88c5" />
+                      <text x="280" y="388" fill="#fff" font-size="17" font-weight="900" text-anchor="middle">AI</text>
+                      <g class="ling-tablet live2d-tablet">
+                        <rect class="ling-tablet-fill" x="113" y="361" width="70" height="52" rx="12" fill="#236d9b" stroke="#9be0f5" stroke-width="3" />
+                        <text x="148" y="392" fill="#fff" font-size="18" font-weight="900" text-anchor="middle">导览</text>
+                      </g>
+                    </g>
+
+                    <g class="ling-arm-left live2d-arm-left">
+                      <path class="ling-arm-fill" d="M151 286 C112 302 99 336 110 371" fill="none" stroke="#169071" stroke-width="22" stroke-linecap="round" />
+                      <circle cx="111" cy="374" r="17" fill="#ffd7bd" />
+                    </g>
+
+                    <g class="ling-wave-arm live2d-arm-right">
+                      <path class="ling-arm-fill" d="M267 283 C310 262 337 230 338 190" fill="none" stroke="#169071" stroke-width="22" stroke-linecap="round" />
+                      <circle cx="338" cy="187" r="17" fill="#ffd7bd" />
+                      <path class="ling-wave-lines" d="M357 154 C372 138 379 121 381 101 M367 181 C388 176 401 165 410 148" fill="none" stroke="#1a9f78" stroke-width="5" stroke-linecap="round" opacity="0.72" />
+                    </g>
+
+                    <g class="ling-head-wrap live2d-head">
+                      <path class="live2d-neck" d="M185 220 H235 V264 C224 276 196 276 185 264 Z" fill="#ffd5bb" />
+                      <ellipse cx="154" cy="166" rx="18" ry="24" fill="#ffd5bb" />
+                      <ellipse cx="266" cy="166" rx="18" ry="24" fill="#ffd5bb" />
+                      <path class="live2d-hair-cap" d="M119 151 C112 92 150 54 210 48 C270 53 309 91 300 151 C294 214 260 239 210 241 C159 239 126 214 119 151 Z" fill="url(#idolHairGradient)" />
+                      <path class="live2d-face" d="M132 143 C136 95 166 67 210 66 C254 67 284 95 288 143 C293 207 262 239 210 241 C158 239 127 207 132 143 Z" fill="url(#idolSkinGradient)" />
+                      <path class="live2d-hair-highlight" d="M139 116 C165 80 207 66 260 83 C229 100 188 103 139 116 Z" fill="url(#idolHairGlow)" />
+                      <path class="live2d-bang live2d-bang-left" d="M134 139 C139 91 161 63 198 57 C192 105 169 139 134 157 Z" fill="url(#idolHairGradient)" />
+                      <path class="live2d-bang live2d-bang-mid" d="M177 57 C210 83 211 128 188 164 C176 125 174 89 177 57 Z" fill="#0c564d" />
+                      <path class="live2d-bang live2d-bang-right" d="M225 58 C260 66 283 93 289 139 C253 132 232 101 225 58 Z" fill="url(#idolHairGradient)" />
+                      <path class="live2d-side-lock live2d-side-lock-left" d="M130 137 C104 174 111 227 145 258 C133 212 147 171 175 137 Z" fill="#063631" opacity="0.95" />
+                      <path class="live2d-side-lock live2d-side-lock-right" d="M291 137 C318 174 311 227 276 258 C289 212 274 171 246 137 Z" fill="#063631" opacity="0.95" />
+                      <g class="live2d-hairpin">
+                        <path d="M260 75 L310 94" stroke="#f6c94a" stroke-width="8" stroke-linecap="round" />
+                        <circle cx="315" cy="96" r="9" fill="#f6c94a" />
+                        <circle cx="315" cy="96" r="4" fill="#fff3bf" />
+                      </g>
+
+                      <g class="ling-face live2d-face-rig">
+                        <g class="ling-eye live2d-eye live2d-eye-left">
+                          <ellipse cx="177" cy="157" rx="20" ry="27" fill="#fff" />
+                          <ellipse cx="178" cy="160" rx="12" ry="18" fill="url(#idolEyeGradient)" />
+                          <circle cx="173" cy="150" r="5" fill="#fff" />
+                          <circle cx="183" cy="166" r="3" fill="#dffcf2" opacity="0.86" />
+                          <path d="M155 137 C168 128 184 128 199 138" fill="none" stroke="#07352f" stroke-width="5" stroke-linecap="round" />
+                        </g>
+                        <g class="ling-eye live2d-eye live2d-eye-right">
+                          <ellipse cx="243" cy="157" rx="20" ry="27" fill="#fff" />
+                          <ellipse cx="244" cy="160" rx="12" ry="18" fill="url(#idolEyeGradient)" />
+                          <circle cx="239" cy="150" r="5" fill="#fff" />
+                          <circle cx="249" cy="166" r="3" fill="#dffcf2" opacity="0.86" />
+                          <path d="M221 138 C236 128 252 128 266 137" fill="none" stroke="#07352f" stroke-width="5" stroke-linecap="round" />
+                        </g>
+                        <ellipse cx="160" cy="188" rx="20" ry="9" fill="#f4a39a" opacity="0.36" />
+                        <ellipse cx="260" cy="188" rx="20" ry="9" fill="#f4a39a" opacity="0.36" />
+                        <path class="live2d-nose" d="M211 169 C207 180 207 187 214 190" fill="none" stroke="#e49c89" stroke-width="3" stroke-linecap="round" opacity="0.6" />
+                        <path class="ling-mouth live2d-mouth" d="M193 202 Q210 215 227 202" fill="none" stroke="#d85f55" stroke-width="7" stroke-linecap="round" />
+                      </g>
+                    </g>
+                  </g>
+                </svg>
+                <div class="licensed-avatar-layer" id="licensedAvatarLayer" aria-live="polite">
+                  <img
+                    id="licensedAvatarImage"
+                    class="licensed-avatar-image"
+                    data-src="./assets/avatar/licensed-character.png"
+                    alt="已授权数字人角色素材"
+                  />
+                  <div class="licensed-avatar-fallback" id="licensedAvatarFallback">
+                    <strong>授权角色素材待放置</strong>
+                    <span>取得正式授权后，将 PNG/WebP 角色立绘保存为 frontend/assets/avatar/licensed-character.png。</span>
+                  </div>
+                </div>
+                <div class="pet-nameplate" id="petNameplate">灵灵 · 景区 AI 导览员</div>
+              </div>
+              <div class="stage-copy">
+                <p class="eyebrow">实时讲解</p>
+                <h2 id="guideStatus">欢迎使用景区导览数字人</h2>
+                <p id="guideSubtitle">当前接入灵山胜境示范知识库，可通过后台更换景区资料。</p>
+              </div>
+            </section>
+
+            <section class="chat-panel" aria-label="游客问答区">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Visitor Console</p>
+                  <h2>智能导览问答</h2>
+                </div>
+                <span class="status-pill" id="apiStatus">服务待检测</span>
+              </div>
+
+              <p class="micro-label">当前知识库推荐问题</p>
+              <div class="quick-questions" aria-label="当前知识库推荐问题">
+                <button type="button" data-question="九龙灌浴几点开始表演">九龙灌浴几点开始表演</button>
+                <button type="button" data-question="灵山大佛有什么文化含义">灵山大佛有什么文化含义</button>
+                <button type="button" data-question="我只有半天时间，怎么游览">半天怎么游览</button>
+              </div>
+
+              <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+
+              <form id="textChatForm" class="ask-form">
+                <input
+                  id="questionInput"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="输入你的问题，例如：九龙灌浴几点开始表演"
+                  aria-label="文本提问"
+                />
+                <button class="primary-button" type="submit">发送</button>
+              </form>
+
+              <div class="voice-row">
+                <button id="recordButton" class="ghost-button" type="button">开始录音</button>
+                <label class="file-trigger">
+                  上传音频
+                  <input id="voiceFileInput" type="file" accept="audio/*" />
+                </label>
+                <span id="voiceHint">语音待命</span>
+              </div>
+            </section>
+          </div>
+
+          <section class="route-section" aria-label="路线推荐">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Route Planner</p>
+                <h2>个性化路线推荐</h2>
+              </div>
+              <form id="routeForm" class="route-controls">
+                <div class="combo-field">
+                  <select id="interestSelect" aria-label="兴趣偏好预设">
+                    <option value="历史文化">历史文化</option>
+                    <option value="佛教文化">佛教文化</option>
+                    <option value="自然风光">自然风光</option>
+                    <option value="亲子休闲">亲子休闲</option>
+                    <option value="custom">自定义兴趣</option>
+                  </select>
+                  <input id="interestCustomInput" class="custom-input hidden" type="text" placeholder="例如：亲子拍照、轻松休闲、避开人流" aria-label="自定义兴趣偏好" />
+                </div>
+                <div class="combo-field">
+                  <select id="durationSelect" aria-label="游览时长预设">
+                    <option value="半天">半天</option>
+                    <option value="全天">全天</option>
+                    <option value="custom">自定义时长</option>
+                  </select>
+                  <input id="durationCustomInput" class="custom-input hidden" type="text" placeholder="例如：2小时、3小时、一天半" aria-label="自定义游览时长" />
+                </div>
+                <button class="primary-button" type="submit">生成路线</button>
+              </form>
+            </div>
+            <div id="routeResult" class="route-result empty-state">选择兴趣和时长后生成推荐路线。</div>
+          </section>
+        </section>
+
+      <section id="adminView" class="view">
+          <section id="loginPanel" class="admin-login">
+            <div>
+              <p class="eyebrow">Admin Console</p>
+              <h2>管理后台登录</h2>
+              <p>面向景区运营人员的数据管理入口。</p>
+            </div>
+            <form id="loginForm" class="login-form">
+              <input id="adminUsername" type="text" value="admin" aria-label="管理员账号" />
+              <input id="adminPassword" type="password" value="admin123" aria-label="管理员密码" />
+              <button class="primary-button" type="submit">登录后台</button>
+            </form>
+          </section>
+
+          <section id="adminWorkspace" class="admin-workspace hidden">
+            <section class="admin-panel scenic-config-panel">
+              <div>
+                <p class="eyebrow">Scenic Config</p>
+                <h2>当前景区资料配置</h2>
+                <p>当前示范景区为 <strong id="configScenicArea">灵山胜境</strong>。管理员可通过知识文档上传补充或替换景区讲解词、文史资料、常见问题与路线资料。</p>
+              </div>
+              <div class="config-list" aria-label="当前景区配置项">
+                <span>知识库：<strong id="configKnowledgeName">灵山胜境</strong></span>
+                <span>数字人：<strong id="configAvatarName">灵灵</strong></span>
+                <span>声音：<strong id="configVoiceName">晓晓女声</strong></span>
+                <span>状态：示范运行</span>
+              </div>
+            </section>
+
+            <section class="admin-panel digital-human-panel">
+              <div class="panel-heading compact">
+                <div>
+                  <p class="eyebrow">Digital Human</p>
+                  <h2>数字人形象管理</h2>
+                </div>
+                <span class="status-pill ok">可配置</span>
+              </div>
+              <form id="digitalHumanForm" class="digital-human-form">
+                <label>
+                  数字人名称
+                  <input id="dhNameInput" type="text" value="灵灵" />
+                </label>
+                <label>
+                  角色身份
+                  <input id="dhRoleInput" type="text" value="景区 AI 导览员" />
+                </label>
+                <label>
+                  示范景区
+                  <input id="dhScenicInput" type="text" value="灵山胜境" />
+                </label>
+                <label>
+                  服装主题
+                  <select id="dhOutfitSelect">
+                    <option value="ling-shan">灵山青绿</option>
+                    <option value="heritage-gold">文旅金</option>
+                    <option value="lake-blue">湖畔蓝</option>
+                    <option value="festival-red">节庆红</option>
+                    <option value="licensed-asset">授权角色素材</option>
+                  </select>
+                </label>
+                <label>
+                  语音声线
+                  <select id="dhVoiceSelect">
+                    <option value="zh-CN-XiaoxiaoNeural">晓晓：温和女声</option>
+                    <option value="zh-CN-YunxiNeural">云希：清亮男声</option>
+                    <option value="zh-CN-XiaoyiNeural">晓伊：亲切女声</option>
+                    <option value="zh-CN-YunjianNeural">云健：稳重男声</option>
+                  </select>
+                </label>
+                <label class="wide-field">
+                  欢迎语
+                  <textarea id="dhGreetingInput" rows="3">当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。</textarea>
+                </label>
+                <div class="form-actions wide-field">
+                  <button class="primary-button" type="submit">保存配置</button>
+                  <button id="previewDigitalHumanButton" class="ghost-button" type="button">预览到游客端</button>
+                </div>
+              </form>
+            </section>
+
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Operations</p>
+                <h2>服务数据看板</h2>
+              </div>
+              <button id="refreshAdminButton" class="ghost-button" type="button">刷新数据</button>
+            </div>
+
+            <div class="metric-grid">
+              <article class="metric-card">
+                <span>今日游客</span>
+                <strong id="todayVisitors">0</strong>
+              </article>
+              <article class="metric-card">
+                <span>今日问答</span>
+                <strong id="todayQaCount">0</strong>
+              </article>
+              <article class="metric-card">
+                <span>满意度</span>
+                <strong id="satisfactionRate">0%</strong>
+              </article>
+            </div>
+
+            <div class="admin-grid">
+              <section class="admin-panel">
+                <h3>热门问题</h3>
+                <div id="hotQuestionsChart" class="bar-chart empty-state">暂无数据</div>
+              </section>
+              <section class="admin-panel">
+                <h3>情绪分布</h3>
+                <div id="emotionChart" class="emotion-list empty-state">暂无数据</div>
+              </section>
+            </div>
+
+            <div class="admin-grid trend-grid">
+              <section class="admin-panel">
+                <h3>本周服务趋势</h3>
+                <div id="weeklyServiceTrend" class="trend-list empty-state">暂无数据</div>
+              </section>
+              <section class="admin-panel">
+                <h3>满意度趋势</h3>
+                <div id="satisfactionTrend" class="trend-list empty-state">暂无数据</div>
+              </section>
+            </div>
+
+            <section class="admin-panel visitor-report-panel">
+              <div class="panel-heading compact">
+                <div>
+                  <p class="eyebrow">Visitor Insight</p>
+                  <h3>游客感受度报告</h3>
+                </div>
+                <span class="status-pill ok">自动分析</span>
+              </div>
+              <p id="visitorReportSummary" class="report-summary">等待后台数据分析。</p>
+              <div class="report-grid">
+                <div>
+                  <h4>游客关注点</h4>
+                  <div id="focusPointsList" class="focus-list empty-state">暂无数据</div>
+                </div>
+                <div>
+                  <h4>七日情绪趋势</h4>
+                  <div id="emotionTrendList" class="trend-list empty-state">暂无数据</div>
+                </div>
+                <div>
+                  <h4>服务建议</h4>
+                  <ul id="serviceSuggestionsList" class="suggestion-list">
+                    <li>暂无建议。</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section class="admin-panel">
+              <div class="panel-heading compact">
+                <h3>问答日志</h3>
+                <button id="reloadLogsButton" class="ghost-button" type="button">重新加载</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>用户</th>
+                      <th>问题</th>
+                      <th>情绪</th>
+                      <th>评分</th>
+                      <th>耗时</th>
+                      <th>时间</th>
+                    </tr>
+                  </thead>
+                  <tbody id="logsTableBody">
+                    <tr>
+                      <td colspan="7">登录后加载日志。</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="admin-panel upload-panel">
+              <div>
+                <h3>知识文档上传</h3>
+                <p>支持 .txt、.md、.docx、.xlsx，用于补充景区知识库。</p>
+              </div>
+              <form id="uploadForm" class="upload-form">
+                <input id="docUploadInput" type="file" accept=".txt,.md,.docx,.xlsx" />
+                <button class="primary-button" type="submit">上传导入</button>
+              </form>
+            </section>
+
+            <section class="admin-panel knowledge-panel">
+              <div class="panel-heading compact">
+                <div>
+                  <p class="eyebrow">Knowledge Base</p>
+                  <h3>知识库管理</h3>
+                </div>
+                <button id="reloadKnowledgeButton" class="ghost-button" type="button">刷新知识库</button>
+              </div>
+              <div class="knowledge-manager">
+                <div class="knowledge-docs" id="knowledgeDocsList">登录后加载知识文档。</div>
+                <div class="knowledge-editor">
+                  <div id="selectedDocInfo" class="empty-state">选择左侧文档后，可查看、编辑、删除知识片段。</div>
+                  <form id="knowledgeDocMetaForm" class="doc-meta-form hidden">
+                    <label>
+                      文档名称
+                      <input id="docNameInput" type="text" />
+                    </label>
+                    <label>
+                      来源
+                      <input id="docSourceInput" type="text" />
+                    </label>
+                    <label>
+                      状态
+                      <select id="docStatusSelect">
+                        <option value="active">启用</option>
+                        <option value="inactive">停用</option>
+                      </select>
+                    </label>
+                    <button class="primary-button" type="submit">保存文档信息</button>
+                  </form>
+                  <div id="knowledgeChunksPreview" class="chunk-list"></div>
+                  <form id="addChunkForm" class="add-chunk-form hidden">
+                    <input id="newChunkTitleInput" type="text" placeholder="新增片段标题，例如：九龙灌浴演出时间" />
+                    <input id="newChunkTagsInput" type="text" placeholder="标签，例如：演出,时间" />
+                    <textarea id="newChunkContentInput" rows="4" placeholder="输入可被数字人检索和回答的知识内容"></textarea>
+                    <button class="primary-button" type="submit">新增知识片段</button>
+                  </form>
+                </div>
+              </div>
+            </section>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js" defer></script>
+  </body>
+</html>
