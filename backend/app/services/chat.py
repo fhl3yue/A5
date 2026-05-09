@@ -8,7 +8,7 @@ from app.config import settings
 from app.models import KnowledgeChunk, QALog, ScenicSpot
 from app.services.audio import generate_tts_audio
 from app.services.digital_human import get_or_create_config
-from app.utils import overlap_score
+from app.utils import normalize_text, overlap_score, to_simplified_chinese
 
 
 POSITIVE_HINTS = ("谢谢", "不错", "喜欢", "推荐", "怎么游", "历史", "文化", "亮点")
@@ -126,9 +126,10 @@ def fallback_answer(question: str, references: list[KnowledgeChunk], spot: Sceni
 
 def answer_question(db: Session, question: str, user_id: str = "guest") -> dict:
     started = time.perf_counter()
+    question = normalize_text(question)
     spot = match_spot(db, question)
     references = build_references(db, question, spot, top_k=3)
-    answer = call_llm_with_context(question, references) or fallback_answer(question, references, spot)
+    answer = to_simplified_chinese(call_llm_with_context(question, references) or fallback_answer(question, references, spot))
     emotion = infer_emotion(question)
     digital_human = get_or_create_config(db)
     audio_url = generate_tts_audio(answer, digital_human.voice_name)
@@ -138,7 +139,7 @@ def answer_question(db: Session, question: str, user_id: str = "guest") -> dict:
         user_id=user_id,
         question=question,
         answer=answer,
-        source_titles="|".join(item.title for item in references),
+        source_titles="|".join(to_simplified_chinese(item.title) for item in references),
         emotion=emotion,
         response_seconds=elapsed,
     )
@@ -151,6 +152,6 @@ def answer_question(db: Session, question: str, user_id: str = "guest") -> dict:
         "answer": answer,
         "audio_url": audio_url,
         "emotion": emotion,
-        "reference": [item.title for item in references],
+        "reference": [to_simplified_chinese(item.title) for item in references],
         "response_seconds": elapsed,
     }

@@ -45,7 +45,7 @@ from app.services.digital_human import get_or_create_config, serialize_config, u
 from app.services.knowledge import import_docx_document, import_plain_text_document, import_xlsx_rows
 from app.services.routes import recommend_route
 from app.services.speech import transcribe_audio_file
-from app.utils import refine_voice_question
+from app.utils import refine_voice_question, to_simplified_chinese
 
 
 ensure_runtime_dirs()
@@ -250,12 +250,12 @@ def admin_logs(limit: int = 50, db: Session = Depends(get_db)):
         LogItem(
             id=item.id,
             user_id=item.user_id,
-            question=item.question,
-            answer=item.answer,
+            question=to_simplified_chinese(item.question),
+            answer=to_simplified_chinese(item.answer),
             emotion=item.emotion,
             satisfaction=item.satisfaction,
             response_seconds=item.response_seconds,
-            source_titles=[value for value in item.source_titles.split("|") if value],
+            source_titles=[to_simplified_chinese(value) for value in item.source_titles.split("|") if value],
             created_at=item.created_at,
         )
         for item in logs

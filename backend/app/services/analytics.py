@@ -5,11 +5,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import QALog
-from app.utils import looks_garbled
+from app.utils import looks_garbled, normalize_text
 
 
 def is_dashboard_hot_question(text: str) -> bool:
-    normalized = text.strip()
+    normalized = normalize_text(text)
     if looks_garbled(normalized):
         return False
     if len(normalized) > 40:
@@ -31,7 +31,7 @@ def build_dashboard(db: Session) -> dict:
     ratings = [item.satisfaction for item in all_logs if item.satisfaction is not None]
     satisfaction_rate = float(round(sum(1 for item in ratings if item >= 4) / len(ratings), 2)) if ratings else 0.0
 
-    hot_counter = Counter(item.question for item in all_logs if is_dashboard_hot_question(item.question))
+    hot_counter = Counter(normalize_text(item.question) for item in all_logs if is_dashboard_hot_question(item.question))
     hot_questions = [{"name": q, "count": c} for q, c in hot_counter.most_common(10)]
 
     emotion_counter = Counter(item.emotion for item in all_logs)
@@ -65,7 +65,7 @@ def build_visitor_report(db: Session) -> dict:
             "service_suggestions": ["先积累不少于 10 条真实或模拟问答记录，再生成更可靠的运营建议。"],
         }
 
-    focus_counter = Counter(item.question for item in all_logs if is_dashboard_hot_question(item.question))
+    focus_counter = Counter(normalize_text(item.question) for item in all_logs if is_dashboard_hot_question(item.question))
     focus_points = [{"name": name, "count": count} for name, count in focus_counter.most_common(6)]
 
     ratings = [item.satisfaction for item in all_logs if item.satisfaction is not None]
