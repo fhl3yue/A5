@@ -13,6 +13,8 @@ venv/
 
 # Generated runtime data
 data/generated/
+build/
+dist/
 
 # Logs and temporary files
 *.log

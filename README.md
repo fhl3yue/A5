@@ -18,6 +18,7 @@ This workspace contains the A-side backend for the Scenic AI Guide competition p
 ## Quick start
 
 Read [docs/backend_setup.md](D:/software/docs/backend_setup.md).
+For Windows demo packaging, read [docs/release_packaging.md](D:/software/docs/release_packaging.md).
 
 After startup, open:
 

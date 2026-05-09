@@ -1,10 +1,21 @@
+import os
+import sys
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-BASE_DIR = Path(__file__).resolve().parents[2]
+def resolve_base_dir() -> Path:
+    override = os.environ.get("SCENIC_AI_BASE_DIR")
+    if override:
+        return Path(override).resolve()
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
+BASE_DIR = resolve_base_dir()
 
 
 class Settings(BaseSettings):

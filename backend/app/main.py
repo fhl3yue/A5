@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.orm import Session
 
-from app.config import ensure_runtime_dirs, settings
+from app.config import BASE_DIR, ensure_runtime_dirs, settings
 from app.database import Base, engine, get_db
 from app.models import AdminUser, KnowledgeChunk, KnowledgeDocument, QALog
 from app.schemas import (
@@ -60,7 +60,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/generated/audio", StaticFiles(directory=settings.audio_output_dir), name="generated-audio")
-frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
+frontend_dir = BASE_DIR / "frontend"
 if frontend_dir.exists():
     app.mount("/app", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
