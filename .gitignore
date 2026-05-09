@@ -15,6 +15,7 @@ venv/
 data/generated/
 build/
 dist/
+.playwright-cli/
 
 # Logs and temporary files
 *.log

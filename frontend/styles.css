@@ -972,6 +972,157 @@ body.theme-festival-red {
   margin: 16px 0;
 }
 
+.ops-screen-panel {
+  margin: 16px 0;
+  padding: 22px;
+  color: #f4fff9;
+  background:
+    linear-gradient(135deg, rgba(13, 79, 60, 0.96), rgba(20, 77, 96, 0.94)),
+    #0d4f3c;
+  border: 1px solid rgba(157, 244, 212, 0.32);
+  border-radius: 8px;
+  box-shadow: 0 22px 54px rgba(13, 79, 60, 0.24);
+}
+
+.ops-screen-panel .eyebrow {
+  color: #9df4d4;
+}
+
+.ops-screen-panel h3 {
+  margin-bottom: 0;
+  font-size: clamp(22px, 2.5vw, 32px);
+}
+
+.ops-screen-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.ops-screen-note {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 12px;
+  color: #fff4c9;
+  font-size: 13px;
+  font-weight: 900;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 244, 201, 0.28);
+  border-radius: 999px;
+}
+
+.ops-screen-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ops-kpi {
+  min-height: 112px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+}
+
+.ops-kpi span,
+.ops-screen-focus span,
+.ops-screen-label {
+  display: block;
+  color: rgba(244, 255, 249, 0.76);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ops-kpi strong {
+  display: block;
+  margin-top: 12px;
+  color: #fff;
+  font-size: clamp(32px, 4vw, 56px);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.ops-screen-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.85fr) minmax(280px, 1fr) minmax(280px, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.ops-screen-focus,
+.ops-screen-grid > div {
+  min-width: 0;
+}
+
+.ops-screen-focus {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+
+.ops-screen-focus strong {
+  color: #fff;
+  font-size: 20px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.ops-screen-label {
+  margin-bottom: 10px;
+}
+
+.ops-screen-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.ops-screen-bars.empty {
+  min-height: 104px;
+  align-content: center;
+  padding: 14px;
+  color: rgba(244, 255, 249, 0.7);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+}
+
+.ops-screen-bar {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+  color: rgba(244, 255, 249, 0.76);
+  font-size: 13px;
+}
+
+.ops-screen-bar i {
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+.ops-screen-bar b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #9df4d4, #f1b53c);
+  border-radius: inherit;
+}
+
+.ops-screen-bar strong {
+  color: #fff;
+  text-align: right;
+}
+
 .scenic-config-panel {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(300px, 0.9fr);
@@ -1827,6 +1978,7 @@ td {
   .hero-band,
   .admin-grid,
   .admin-login,
+  .ops-screen-grid,
   .scenic-config-panel,
   .report-grid,
   .knowledge-manager,
@@ -1836,6 +1988,10 @@ td {
 
   .digital-human-form {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .ops-screen-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .guide-stage,
@@ -1878,6 +2034,7 @@ td {
   .topbar,
   .panel-heading,
   .section-heading,
+  .ops-screen-header,
   .upload-panel {
     align-items: stretch;
     flex-direction: column;
@@ -1895,6 +2052,7 @@ td {
 
   .ask-form,
   .metric-grid,
+  .ops-screen-kpis,
   .config-list,
   .digital-human-form {
     grid-template-columns: 1fr;
@@ -1902,7 +2060,8 @@ td {
 
   .admin-login,
   .admin-workspace,
-  .admin-panel {
+  .admin-panel,
+  .ops-screen-panel {
     padding: 16px;
   }
 
@@ -1920,6 +2079,14 @@ td {
 
   .metric-card strong {
     font-size: 34px;
+  }
+
+  .ops-kpi {
+    min-height: 96px;
+  }
+
+  .ops-screen-bar {
+    grid-template-columns: 44px minmax(0, 1fr) 46px;
   }
 
   .form-actions,
@@ -2098,6 +2265,7 @@ td {
   .admin-login,
   .admin-workspace,
   .admin-panel,
+  .ops-screen-panel,
   .route-section,
   .chat-panel,
   .guide-stage {

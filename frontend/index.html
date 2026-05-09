@@ -349,6 +349,48 @@
               <button id="refreshAdminButton" class="ghost-button" type="button">刷新数据</button>
             </div>
 
+            <section class="ops-screen-panel" aria-label="数据大屏概览">
+              <div class="ops-screen-header">
+                <div>
+                  <p class="eyebrow">Overview Screen</p>
+                  <h3>数据大屏概览</h3>
+                </div>
+                <span id="bigInsightNote" class="ops-screen-note">等待运营数据。</span>
+              </div>
+              <div class="ops-screen-kpis">
+                <div class="ops-kpi">
+                  <span>今日服务人次</span>
+                  <strong id="bigTodayVisitors">0</strong>
+                </div>
+                <div class="ops-kpi">
+                  <span>本周服务人次</span>
+                  <strong id="bigWeekVisitors">0</strong>
+                </div>
+                <div class="ops-kpi">
+                  <span>本周问答量</span>
+                  <strong id="bigWeekQaCount">0</strong>
+                </div>
+                <div class="ops-kpi">
+                  <span>游客满意度</span>
+                  <strong id="bigSatisfactionRate">0%</strong>
+                </div>
+              </div>
+              <div class="ops-screen-grid">
+                <div class="ops-screen-focus">
+                  <span>最高频问答</span>
+                  <strong id="bigTopQuestion">暂无热门问题</strong>
+                </div>
+                <div>
+                  <span class="ops-screen-label">七日服务走势</span>
+                  <div id="bigServiceBars" class="ops-screen-bars">暂无本周服务数据</div>
+                </div>
+                <div>
+                  <span class="ops-screen-label">满意度趋势</span>
+                  <div id="bigSatisfactionBars" class="ops-screen-bars">暂无满意度趋势</div>
+                </div>
+              </div>
+            </section>
+
             <div class="metric-grid">
               <article class="metric-card">
                 <span>今日游客</span>

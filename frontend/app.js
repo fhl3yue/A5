@@ -39,6 +39,14 @@ const elements = {
   loginForm: $("#loginForm"),
   adminUsername: $("#adminUsername"),
   adminPassword: $("#adminPassword"),
+  bigInsightNote: $("#bigInsightNote"),
+  bigTodayVisitors: $("#bigTodayVisitors"),
+  bigWeekVisitors: $("#bigWeekVisitors"),
+  bigWeekQaCount: $("#bigWeekQaCount"),
+  bigSatisfactionRate: $("#bigSatisfactionRate"),
+  bigTopQuestion: $("#bigTopQuestion"),
+  bigServiceBars: $("#bigServiceBars"),
+  bigSatisfactionBars: $("#bigSatisfactionBars"),
   todayVisitors: $("#todayVisitors"),
   todayQaCount: $("#todayQaCount"),
   satisfactionRate: $("#satisfactionRate"),
@@ -634,10 +642,63 @@ function renderDashboard(data) {
   elements.todayVisitors.textContent = data.today_visitors ?? 0;
   elements.todayQaCount.textContent = data.today_qa_count ?? 0;
   elements.satisfactionRate.textContent = `${Math.round((data.satisfaction_rate ?? 0) * 100)}%`;
+  renderOpsScreenOverview(data);
   renderHotQuestions(data.hot_questions || []);
   renderEmotion(data.emotion_distribution || []);
   renderWeeklyServiceTrend(data.weekly_service_trend || []);
   renderSatisfactionTrend(data.satisfaction_trend || []);
+}
+
+function renderOpsScreenOverview(data) {
+  const weeklyTrend = data.weekly_service_trend || [];
+  const satisfactionTrend = data.satisfaction_trend || [];
+  const hotQuestions = data.hot_questions || [];
+  const weekVisitors = weeklyTrend.reduce((sum, item) => sum + Number(item.visitors || 0), 0);
+  const weekQaCount = weeklyTrend.reduce((sum, item) => sum + Number(item.qa_count || 0), 0);
+  const satisfactionRate = Math.round((data.satisfaction_rate || 0) * 100);
+  const topQuestion = hotQuestions[0];
+
+  elements.bigTodayVisitors.textContent = data.today_visitors ?? 0;
+  elements.bigWeekVisitors.textContent = weekVisitors;
+  elements.bigWeekQaCount.textContent = weekQaCount;
+  elements.bigSatisfactionRate.textContent = `${satisfactionRate}%`;
+  elements.bigTopQuestion.textContent = topQuestion?.name || "暂无热门问题";
+  elements.bigInsightNote.textContent = topQuestion
+    ? `最高频问题出现 ${topQuestion.count} 次`
+    : "等待游客问答数据。";
+  renderOpsScreenBars(elements.bigServiceBars, weeklyTrend, "qa_count", "暂无本周服务数据", (item) => item.qa_count);
+  renderOpsScreenBars(
+    elements.bigSatisfactionBars,
+    satisfactionTrend,
+    "satisfaction_rate",
+    "暂无满意度趋势",
+    (item) => `${Math.round((item.satisfaction_rate || 0) * 100)}%`
+  );
+}
+
+function renderOpsScreenBars(target, items, valueKey, emptyText, valueLabel) {
+  if (!items.length) {
+    target.className = "ops-screen-bars empty";
+    target.textContent = emptyText;
+    return;
+  }
+
+  const values = items.map((item) => Number(item[valueKey] || 0));
+  const max = Math.max(...values, 1);
+  target.className = "ops-screen-bars";
+  target.innerHTML = items
+    .map((item) => {
+      const rawValue = Number(item[valueKey] || 0);
+      const width = Math.max(4, (rawValue / max) * 100);
+      return `
+        <div class="ops-screen-bar">
+          <span>${escapeHtml(item.date.slice(5))}</span>
+          <i><b style="width:${width}%"></b></i>
+          <strong>${escapeHtml(valueLabel(item))}</strong>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function renderHotQuestions(items) {
