@@ -3,7 +3,7 @@
 ## 1. 安装依赖
 
 ```powershell
-cd D:\software
+cd <项目目录>
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r backend\requirements.txt
@@ -13,7 +13,7 @@ Copy-Item .env.example .env
 ## 2. 初始化数据库
 
 ```powershell
-$env:PYTHONPATH='D:\software\backend'
+$env:PYTHONPATH=(Resolve-Path .\backend).Path
 python scripts\init_db.py
 python scripts\import_sample_data.py
 python scripts\import_official_materials.py
@@ -22,14 +22,14 @@ python scripts\import_official_materials.py
 ## 3. 启动服务
 
 ```powershell
-$env:PYTHONPATH='D:\software\backend'
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --app-dir D:\software\backend
+$env:PYTHONPATH=(Resolve-Path .\backend).Path
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --app-dir .\backend
 ```
 
 或者直接执行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File D:\software\start_backend.ps1
+powershell -ExecutionPolicy Bypass -File .\start_backend.ps1
 ```
 
 启动成功后可以访问：
@@ -56,11 +56,11 @@ powershell -ExecutionPolicy Bypass -File D:\software\start_backend.ps1
 只清空问答日志和生成音频：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File D:\software\reset_demo_env.ps1
+powershell -ExecutionPolicy Bypass -File .\reset_demo_env.ps1
 ```
 
 完整重置数据库并重新导入样例和官方资料：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File D:\software\reset_demo_env.ps1 -Full
+powershell -ExecutionPolicy Bypass -File .\reset_demo_env.ps1 -Full
 ```

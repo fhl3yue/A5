@@ -121,7 +121,7 @@ A 端的开发不是并行乱做，而是按下面这条主线推进：
 
 ### 4.1.1 目标
 
-在 `D:\software` 下建立一个独立的 A 端开发工作区，使后续所有脚本、数据、接口和文档都有统一位置，避免与其他项目混淆。
+在项目根目录下建立一个独立的 A 端开发工作区，使后续所有脚本、数据、接口和文档都有统一位置，避免与其他项目混淆。
 
 ### 4.1.2 实施内容
 
@@ -147,7 +147,7 @@ A 端的开发不是并行乱做，而是按下面这条主线推进：
 形成了可独立启动的 A 端工作区，主要目录如下：
 
 ```text
-D:\software
+<项目目录>
 ├─ backend
 ├─ scripts
 ├─ data
@@ -570,19 +570,19 @@ D:\software
 
 当前 A 端核心说明文件包括：
 
-- `D:\software\docs\api.md`
-- `D:\software\docs\backend_setup.md`
-- `D:\software\docs\frontend_handoff.md`
-- `D:\software\docs\test_questions.md`
+- `docs\api.md`
+- `docs\backend_setup.md`
+- `docs\frontend_handoff.md`
+- `docs\test_questions.md`
 
 当前常用脚本包括：
 
-- `D:\software\start_backend.ps1`
-- `D:\software\reset_demo_env.ps1`
-- `D:\software\scripts\init_db.py`
-- `D:\software\scripts\import_sample_data.py`
-- `D:\software\scripts\import_official_materials.py`
-- `D:\software\scripts\reset_demo_data.py`
+- `start_backend.ps1`
+- `reset_demo_env.ps1`
+- `scripts\init_db.py`
+- `scripts\import_sample_data.py`
+- `scripts\import_official_materials.py`
+- `scripts\reset_demo_data.py`
 
 ---
 

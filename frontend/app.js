@@ -1,6 +1,7 @@
 const state = {
   currentLogId: null,
   audio: null,
+  video: null,
   recorder: null,
   recordingStream: null,
   recordingChunks: [],
@@ -12,6 +13,30 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const LICENSED_AVATAR_URL = "./assets/avatar/licensed-character.png";
+const runtimeParams = new URLSearchParams(window.location.search);
+const runtimeClient = (runtimeParams.get("client") || "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+
+function getStoredApiBaseUrl() {
+  try {
+    return localStorage.getItem("scenic_api_base_url") || "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeBaseUrl(value) {
+  return String(value || "").trim().replace(/\/+$/, "");
+}
+
+function isAbsoluteUrl(value) {
+  return /^(https?:|data:|blob:)/i.test(value || "");
+}
+
+const API_BASE_URL = normalizeBaseUrl(runtimeParams.get("apiBase") || window.SCENIC_AI_API_BASE_URL || getStoredApiBaseUrl());
+
+if (runtimeClient) {
+  document.body.classList.add(`client-${runtimeClient}`);
+}
 const ZH_TW_TO_CN = {
   "萬": "万",
   "與": "与",
@@ -259,11 +284,14 @@ const ZH_TW_PATTERN = new RegExp(`[${Object.keys(ZH_TW_TO_CN).join("")}]`, "g");
 
 const elements = {
   apiStatus: $("#apiStatus"),
+  docsLink: $("#docsLink"),
   avatarFrame: $("#avatarFrame"),
   petSpeech: $("#petSpeech"),
   petNameplate: $("#petNameplate"),
   licensedAvatarImage: $("#licensedAvatarImage"),
   licensedAvatarFallback: $("#licensedAvatarFallback"),
+  digitalVideoLayer: $("#digitalVideoLayer"),
+  digitalVideoPlayer: $("#digitalVideoPlayer"),
   guideStatus: $("#guideStatus"),
   guideSubtitle: $("#guideSubtitle"),
   chatMessages: $("#chatMessages"),
@@ -343,8 +371,22 @@ function showToast(message, type = "success") {
   }, 2800);
 }
 
+function buildApiUrl(path) {
+  if (!path || isAbsoluteUrl(path) || !API_BASE_URL) {
+    return path;
+  }
+  return new URL(path, `${API_BASE_URL}/`).toString();
+}
+
+function resolveMediaUrl(url) {
+  if (!url || isAbsoluteUrl(url) || !API_BASE_URL) {
+    return url;
+  }
+  return new URL(url, `${API_BASE_URL}/`).toString();
+}
+
 async function apiFetch(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(buildApiUrl(path), {
     ...options,
     headers: {
       ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
@@ -562,6 +604,12 @@ function setApiStatus(text, type) {
   elements.apiStatus.className = `status-pill ${type}`;
 }
 
+function configureRuntimeLinks() {
+  if (elements.docsLink && API_BASE_URL) {
+    elements.docsLink.href = buildApiUrl("/docs");
+  }
+}
+
 function addMessage(type, html, extraClass = "") {
   const node = document.createElement("div");
   node.className = `message ${type} ${extraClass}`.trim();
@@ -610,6 +658,13 @@ function renderAnswer(data, options = {}) {
   const audioButton = data.audio_url
     ? `<button class="small-action" type="button" data-audio-url="${escapeHtml(data.audio_url)}">播放回答</button>`
     : "";
+  const videoReady = data.video_url && data.video_status === "ready";
+  const videoButton = videoReady
+    ? `<button class="small-action" type="button" data-video-url="${escapeHtml(data.video_url)}" data-fallback-audio-url="${escapeHtml(data.audio_url || "")}">播放数字人视频</button>`
+    : "";
+  const videoTag = data.video_status && data.video_status !== "disabled"
+    ? `<span class="tag">视频：${escapeHtml(data.video_status)}</span>`
+    : "";
 
   addMessage(
     "assistant",
@@ -621,8 +676,10 @@ function renderAnswer(data, options = {}) {
       <div class="message-meta">
         <span class="tag">${escapeHtml(data.emotion || "neutral")}</span>
         <span class="tag">${Number(data.response_seconds || 0).toFixed(2)} 秒</span>
+        ${videoTag}
       </div>
       <div class="message-actions">
+        ${videoButton}
         ${audioButton}
       </div>
       ${renderFeedbackActions(data.log_id)}
@@ -631,7 +688,9 @@ function renderAnswer(data, options = {}) {
 
   setGuideState("已完成回答", data.interpreted_question || data.transcript || "欢迎继续提问");
   setPetMode("success");
-  if (data.audio_url) {
+  if (videoReady) {
+    playDigitalVideo(data.video_url, data.audio_url);
+  } else if (data.audio_url) {
     playAudio(data.audio_url);
   }
 }
@@ -737,14 +796,10 @@ function playAudio(url) {
     showToast("这条回答没有可播放音频。", "error");
     return;
   }
-  if (state.audio) {
-    state.audio.pause();
-    state.audio.removeEventListener("play", markSpeaking);
-    state.audio.removeEventListener("ended", unmarkSpeaking);
-    state.audio.removeEventListener("pause", unmarkSpeaking);
-  }
+  stopVideoPlayback();
+  stopAudioPlayback();
 
-  state.audio = new Audio(url);
+  state.audio = new Audio(resolveMediaUrl(url));
   state.audio.addEventListener("play", markSpeaking);
   state.audio.addEventListener("ended", unmarkSpeaking);
   state.audio.addEventListener("pause", unmarkSpeaking);
@@ -754,9 +809,87 @@ function playAudio(url) {
   });
 }
 
+function playDigitalVideo(url, fallbackAudioUrl = "") {
+  if (!url || !elements.digitalVideoPlayer) {
+    if (fallbackAudioUrl) {
+      playAudio(fallbackAudioUrl);
+    }
+    return;
+  }
+
+  stopAudioPlayback();
+  stopVideoPlayback();
+
+  const player = elements.digitalVideoPlayer;
+  state.video = player;
+  player.src = resolveMediaUrl(url);
+  player.currentTime = 0;
+  player.onplay = () => {
+    elements.avatarFrame.classList.add("video-active");
+    markSpeaking();
+  };
+  player.onpause = () => {
+    if (!player.ended) {
+      unmarkSpeaking();
+    }
+  };
+  player.onended = () => {
+    stopVideoPlayback();
+    unmarkSpeaking();
+  };
+  player.onerror = () => {
+    stopVideoPlayback();
+    unmarkSpeaking();
+    if (fallbackAudioUrl) {
+      playAudio(fallbackAudioUrl);
+    } else {
+      showToast("数字人视频播放失败。", "error");
+    }
+  };
+  elements.avatarFrame.classList.add("video-active");
+  setGuideState("正在播报", "数字人正在播放视频讲解。");
+  setPetSpeech("视频讲解中");
+
+  player.play().catch((error) => {
+    stopVideoPlayback();
+    unmarkSpeaking();
+    if (fallbackAudioUrl) {
+      playAudio(fallbackAudioUrl);
+    } else {
+      showToast(`数字人视频播放失败：${error.message}`, "error");
+    }
+  });
+}
+
+function stopAudioPlayback() {
+  if (!state.audio) {
+    return;
+  }
+  state.audio.pause();
+  state.audio.removeEventListener("play", markSpeaking);
+  state.audio.removeEventListener("ended", unmarkSpeaking);
+  state.audio.removeEventListener("pause", unmarkSpeaking);
+  state.audio = null;
+}
+
+function stopVideoPlayback() {
+  const player = state.video || elements.digitalVideoPlayer;
+  if (player) {
+    player.onplay = null;
+    player.onpause = null;
+    player.onended = null;
+    player.onerror = null;
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+  }
+  state.video = null;
+  elements.avatarFrame.classList.remove("video-active");
+}
+
 function markSpeaking() {
   setPetMode("speaking");
-  setGuideState("正在播报", "数字人正在播放语音回答。");
+  setGuideState("正在播报", "数字人正在播放讲解内容。");
   setPetSpeech("正在播报");
 }
 
@@ -1398,7 +1531,7 @@ async function uploadDocument() {
 
 async function checkApiHealth() {
   try {
-    const response = await fetch("/api/health");
+    const response = await fetch(buildApiUrl("/api/health"));
     if (!response.ok) {
       throw new Error("health check failed");
     }
@@ -1459,6 +1592,12 @@ function bindEvents() {
   });
 
   elements.chatMessages.addEventListener("click", (event) => {
+    const videoButton = event.target.closest("[data-video-url]");
+    if (videoButton) {
+      playDigitalVideo(videoButton.dataset.videoUrl, videoButton.dataset.fallbackAudioUrl || "");
+      return;
+    }
+
     const audioButton = event.target.closest("[data-audio-url]");
     if (audioButton) {
       playAudio(audioButton.dataset.audioUrl);
@@ -1539,6 +1678,7 @@ function bindEvents() {
 }
 
 async function boot() {
+  configureRuntimeLinks();
   bindEvents();
   bindLicensedAvatarAsset();
   checkApiHealth();

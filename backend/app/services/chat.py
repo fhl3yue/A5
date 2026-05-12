@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import KnowledgeChunk, QALog, ScenicSpot
 from app.services.audio import generate_tts_audio
+from app.services.digital_video import generate_digital_video
 from app.services.digital_human import get_or_create_config
 from app.utils import normalize_text, overlap_score, to_simplified_chinese
 
@@ -133,6 +134,7 @@ def answer_question(db: Session, question: str, user_id: str = "guest") -> dict:
     emotion = infer_emotion(question)
     digital_human = get_or_create_config(db)
     audio_url = generate_tts_audio(answer, digital_human.voice_name)
+    digital_video = generate_digital_video(answer, audio_url)
     elapsed = round(time.perf_counter() - started, 3)
 
     log = QALog(
@@ -151,6 +153,8 @@ def answer_question(db: Session, question: str, user_id: str = "guest") -> dict:
         "log_id": log.id,
         "answer": answer,
         "audio_url": audio_url,
+        "video_url": digital_video.video_url,
+        "video_status": digital_video.video_status,
         "emotion": emotion,
         "reference": [to_simplified_chinese(item.title) for item in references],
         "response_seconds": elapsed,

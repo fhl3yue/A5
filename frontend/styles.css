@@ -162,6 +162,11 @@ h3 {
   align-items: center;
 }
 
+body.client-android .docs-link,
+body.client-android .tab-button[data-view="adminView"] {
+  display: none;
+}
+
 .primary-button {
   padding: 0 20px;
   color: #fff;
@@ -374,6 +379,35 @@ h3 {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.7;
+}
+
+.digital-video-layer {
+  position: absolute;
+  inset: 52px 18px 54px;
+  z-index: 3;
+  display: none;
+  place-items: center;
+  pointer-events: auto;
+}
+
+.digital-video-player {
+  width: min(96%, 410px);
+  max-height: 100%;
+  object-fit: contain;
+  background: #062f2a;
+  border: 1px solid rgba(207, 229, 219, 0.86);
+  border-radius: 8px;
+  box-shadow: 0 28px 52px rgba(13, 79, 60, 0.24);
+}
+
+.avatar-frame.video-active .digital-video-layer {
+  display: grid;
+}
+
+.avatar-frame.video-active .pet-character,
+.avatar-frame.video-active .licensed-avatar-layer {
+  opacity: 0;
+  pointer-events: none;
 }
 
 body.theme-licensed-asset .licensed-avatar-layer {

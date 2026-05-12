@@ -30,6 +30,8 @@
     "interpreted_question": "九龙灌浴几点开始表演？",
     "answer": "根据当前景区知识库，...",
     "audio_url": "/generated/audio/answer_xxx.mp3",
+    "video_url": "https://gpu.example.com/generated/video/answer_xxx.mp4",
+    "video_status": "ready",
     "emotion": "neutral",
     "reference": ["九龙灌浴"],
     "response_seconds": 0.182
@@ -49,7 +51,8 @@
 - 当前版本已接入本地 ASR，可直接上传音频文件
 - 若前端自己先完成转写，也可以继续传 `transcript`
 - 返回中的 `transcript` 是原始识别文本，`interpreted_question` 是后端提炼后的最终检索问题
-- 文本问答与语音问答在成功时都会尽量返回 `audio_url`，前端可直接播放该地址
+- 文本问答与语音问答在成功时都会尽量返回 `audio_url`
+- 开启数字人视频服务后会返回 `video_url` 和 `video_status`；`ready` 播放视频，`timeout/error/disabled` 回退音频
 
 ## 4. 路线推荐
 
@@ -201,5 +204,45 @@
   "outfit_theme": "ling-shan",
   "voice_name": "zh-CN-XiaoxiaoNeural",
   "greeting": "当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。"
+}
+```
+
+## 13. 外部数字人视频服务协议
+
+后端配置项：
+
+```dotenv
+DIGITAL_VIDEO_ENABLED=true
+DIGITAL_VIDEO_BASE_URL=https://gpu.example.com
+DIGITAL_VIDEO_API_KEY=replace-with-token
+DIGITAL_VIDEO_AVATAR_ID=default
+DIGITAL_VIDEO_TIMEOUT_SECONDS=8
+```
+
+后端请求：
+
+```text
+POST {DIGITAL_VIDEO_BASE_URL}/api/digital-video/generate
+```
+
+请求体：
+
+```json
+{
+  "request_id": "uuid",
+  "avatar_id": "default",
+  "text": "数字人讲解文本",
+  "audio_url": "/generated/audio/answer_xxx.mp3",
+  "max_wait_seconds": 8
+}
+```
+
+返回体：
+
+```json
+{
+  "status": "ready",
+  "video_url": "https://gpu.example.com/generated/video/answer_xxx.mp4",
+  "message": "ok"
 }
 ```

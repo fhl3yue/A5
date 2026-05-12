@@ -4,13 +4,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Set-Location "D:\software"
-$env:PYTHONPATH = "D:\software\backend"
+$RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $RepoRoot
+
+$BackendDir = Join-Path $RepoRoot "backend"
+$Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
+$ResetScript = Join-Path $RepoRoot "scripts\reset_demo_data.py"
+$env:PYTHONPATH = $BackendDir
 
 if ($Full) {
-  & "D:\software\.venv\Scripts\python.exe" "D:\software\scripts\reset_demo_data.py" --full
+  & $Python $ResetScript --full
 } else {
-  & "D:\software\.venv\Scripts\python.exe" "D:\software\scripts\reset_demo_data.py"
+  & $Python $ResetScript
 }
 
 Write-Host "Demo environment reset completed." -ForegroundColor Green

@@ -16,6 +16,8 @@ data/generated/
 build/
 dist/
 .playwright-cli/
+.gradle/
+local.properties
 
 # Logs and temporary files
 *.log

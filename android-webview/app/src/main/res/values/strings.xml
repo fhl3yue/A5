@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">景区导览数字人</string>
+    <string name="scenic_app_url">https://your-domain.example/app/?client=android</string>
+</resources>

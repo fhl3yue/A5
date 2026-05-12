@@ -14,6 +14,8 @@ class ChatData(BaseModel):
     interpreted_question: str | None = None
     answer: str
     audio_url: str | None = None
+    video_url: str | None = None
+    video_status: str = "disabled"
     emotion: str = "neutral"
     reference: list[str] = []
     response_seconds: float = 0.0

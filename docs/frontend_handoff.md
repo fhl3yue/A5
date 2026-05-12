@@ -318,13 +318,13 @@
 每次演示前建议先执行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File D:\software\reset_demo_env.ps1
+powershell -ExecutionPolicy Bypass -File .\reset_demo_env.ps1
 ```
 
 如果要彻底恢复到干净数据状态：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File D:\software\reset_demo_env.ps1 -Full
+powershell -ExecutionPolicy Bypass -File .\reset_demo_env.ps1 -Full
 ```
 
 ## 9. 服务地址

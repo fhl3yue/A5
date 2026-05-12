@@ -9,9 +9,9 @@
 
 当前 B 端采用轻量静态前端方式实现，前端文件位于：
 
-- `D:\software\frontend\index.html`
-- `D:\software\frontend\styles.css`
-- `D:\software\frontend\app.js`
+- `frontend\index.html`
+- `frontend\styles.css`
+- `frontend\app.js`
 
 该方案不依赖额外的 Node.js、Vue、React 或 Vite 环境，直接由 FastAPI 后端托管。启动后端后即可访问：
 
@@ -85,8 +85,8 @@
 
 1. 用户在游客端输入问题
 2. 前端调用 `/api/chat/text`
-3. 后端返回答案、音频地址、参考来源和日志 ID
-4. 前端显示回答并尝试播放音频
+3. 后端返回答案、音频地址、数字人视频状态、参考来源和日志 ID
+4. 前端优先播放 `video_status=ready` 的数字人视频，失败时回退音频
 5. 用户提交满意度
 6. 前端调用 `/api/feedback`
 7. 后台看板数据随日志和评分变化
@@ -97,7 +97,7 @@
 2. 前端以 `multipart/form-data` 调用 `/api/chat/voice`
 3. 后端完成语音识别、问题提炼、知识库问答和语音合成
 4. 前端展示 `transcript` 和 `interpreted_question`
-5. 前端展示答案并播放 `audio_url`
+5. 前端展示答案，优先播放 `video_url`，失败时播放 `audio_url`
 
 ### 5.3 路线推荐流程
 
@@ -133,7 +133,7 @@
 启动后端：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File D:\software\start_backend.ps1
+powershell -ExecutionPolicy Bypass -File .\start_backend.ps1
 ```
 
 打开前端页面：

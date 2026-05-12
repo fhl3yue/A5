@@ -19,7 +19,7 @@
         <nav class="view-tabs" aria-label="主功能切换">
           <button class="tab-button active" data-view="visitorView" type="button">游客端</button>
           <button class="tab-button" data-view="adminView" type="button">管理端</button>
-          <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">开发文档</a>
+          <a id="docsLink" class="docs-link" href="/docs" target="_blank" rel="noreferrer">开发文档</a>
         </nav>
       </header>
 
@@ -179,6 +179,9 @@
                     <strong>授权角色素材待放置</strong>
                     <span>取得正式授权后，将 PNG/WebP 角色立绘保存为 frontend/assets/avatar/licensed-character.png。</span>
                   </div>
+                </div>
+                <div class="digital-video-layer" id="digitalVideoLayer" aria-live="polite">
+                  <video id="digitalVideoPlayer" class="digital-video-player" playsinline preload="metadata" controls></video>
                 </div>
                 <div class="pet-nameplate" id="petNameplate">灵灵 · 景区 AI 导览员</div>
               </div>
@@ -539,6 +542,6 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=20260509-simplified" defer></script>
+    <script src="./app.js?v=20260512-video-client" defer></script>
   </body>
 </html>

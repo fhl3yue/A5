@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     official_materials_dir: str = "C:/Users/LWQ/Documents/Playground/cnsoftbei_a5_data"
     enable_tts: bool = True
     tts_voice: str = "zh-CN-XiaoxiaoNeural"
+    digital_video_enabled: bool = False
+    digital_video_base_url: str = ""
+    digital_video_api_key: str = ""
+    digital_video_avatar_id: str = "default"
+    digital_video_timeout_seconds: int = 8
     enable_asr: bool = True
     asr_model_size: str = "base"
     asr_device: str = "cpu"

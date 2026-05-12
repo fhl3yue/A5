@@ -17,8 +17,21 @@ This workspace contains the A-side backend for the Scenic AI Guide competition p
 
 ## Quick start
 
-Read [docs/backend_setup.md](D:/software/docs/backend_setup.md).
-For Windows demo packaging, read [docs/release_packaging.md](D:/software/docs/release_packaging.md).
+Read [docs/backend_setup.md](docs/backend_setup.md).
+For release packaging, read [docs/release_packaging.md](docs/release_packaging.md).
+
+## Portable local start
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\pip install -r backend\requirements.txt
+powershell -ExecutionPolicy Bypass -File .\start_backend.ps1
+```
+
+## Low-device clients
+
+- Windows cloud client: `powershell -ExecutionPolicy Bypass -File .\scripts\build_windows_cloud_client.ps1`
+- Android WebView APK: run GitHub Actions workflow `Build Android APK`; local fallback is `powershell -ExecutionPolicy Bypass -File .\scripts\build_android_webview.ps1`
 
 After startup, open:
 
