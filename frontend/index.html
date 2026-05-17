@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>灵山胜境 AI 数字人导览</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260514-rebuild" />
   </head>
   <body>
     <div class="app-shell">
@@ -27,7 +27,17 @@
         <section id="visitorView" class="view active">
           <div class="hero-band">
             <section class="guide-stage" aria-label="数字人导览展示区">
-              <div class="scene-chip">当前示范景区：灵山胜境</div>
+              <div class="stage-head">
+                <div>
+                  <p class="eyebrow">Live Guide Stage</p>
+                  <div class="scene-chip">灵山胜境</div>
+                </div>
+                <div class="stage-status-strip" aria-label="导览状态">
+                  <span>云端视频</span>
+                  <span>知识库在线</span>
+                  <span>音频回退</span>
+                </div>
+              </div>
               <div class="avatar-frame pet-frame" id="avatarFrame">
                 <div class="pet-orbit"></div>
                 <div class="pet-speech" id="petSpeech">景区导览中</div>
@@ -190,6 +200,11 @@
                 <h2 id="guideStatus">欢迎使用景区导览数字人</h2>
                 <p id="guideSubtitle">当前接入灵山胜境示范知识库，可通过后台更换景区资料。</p>
               </div>
+              <div class="stage-data-row" aria-label="导览能力状态">
+                <span><strong>8s</strong> 视频等待上限</span>
+                <span><strong>HTTPS</strong> 云端服务</span>
+                <span><strong>Web</strong> EXE / APK 壳</span>
+              </div>
             </section>
 
             <section class="chat-panel" aria-label="游客问答区">
@@ -199,6 +214,11 @@
                   <h2>智能导览问答</h2>
                 </div>
                 <span class="status-pill" id="apiStatus">服务待检测</span>
+              </div>
+              <div class="console-metrics" aria-label="游客端运行状态">
+                <span><strong>问答</strong> 文本 / 语音</span>
+                <span><strong>输出</strong> 视频 / 音频</span>
+                <span><strong>场景</strong> 游客端</span>
               </div>
 
               <p class="micro-label">当前知识库推荐问题</p>
@@ -232,7 +252,8 @@
             </section>
           </div>
 
-          <section class="route-section" aria-label="路线推荐">
+          <div class="visitor-workbench" aria-label="游客导览工作区">
+          <section class="route-section workbench-panel" aria-label="路线推荐">
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Route Planner</p>
@@ -262,6 +283,33 @@
             </div>
             <div id="routeResult" class="route-result empty-state">选择兴趣和时长后生成推荐路线。</div>
           </section>
+            <section class="culture-panel workbench-panel" aria-label="文化礼仪提示">
+              <div class="section-heading compact-heading">
+                <div>
+                  <p class="eyebrow">Etiquette</p>
+                  <h2>文化礼仪提示</h2>
+                </div>
+              </div>
+              <div class="cue-list">
+                <span>殿堂区域保持安静参观</span>
+                <span>拍摄前留意现场标识</span>
+                <span>高峰时段按动线分流</span>
+              </div>
+            </section>
+            <section class="service-panel workbench-panel" aria-label="服务状态">
+              <div class="section-heading compact-heading">
+                <div>
+                  <p class="eyebrow">Service</p>
+                  <h2>服务状态</h2>
+                </div>
+              </div>
+              <div class="service-stack">
+                <span><strong>数字人视频</strong><em>就绪优先播放</em></span>
+                <span><strong>语音问答</strong><em>失败自动回退</em></span>
+                <span><strong>内容边界</strong><em>知识库生成</em></span>
+              </div>
+            </section>
+          </div>
         </section>
 
       <section id="adminView" class="view">
