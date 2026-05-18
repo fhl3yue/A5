@@ -1,4 +1,4 @@
-# 景区导览服务AI数字人项目
+﻿# 景区导览服务AI数字人项目
 # B端前端实现说明
 
 ## 1. 文档目的
@@ -40,7 +40,7 @@
 13. 当前示范景区提示
 14. 路线推荐自定义兴趣与自定义时长输入
 
-其中数字人展示区已支持自制或明确授权的 PNG/WebP/AVIF/GIF/JPG 图片形象素材，透明背景优先，默认内置项目自制 `frontend/assets/avatar/default-guide-avatar.png`。外部视频服务返回 `video_status=ready` 时优先播放数字人视频，失败时回退音频和前端动效。
+其中数字人展示区已支持自制或明确授权的 PNG/WebP/AVIF/GIF/JPG 图片形象素材，透明背景优先，默认内置项目自制 `frontend/assets/avatar/avatar-guide-v1.png`。外部视频服务返回 `video_status=ready` 时优先播放数字人视频，失败时回退音频和前端动效。
 
 游客端新增讲解模式入口：问答讲解、路线讲解、景点讲解、礼仪提示。点击后会切换输入提示并填入对应讲解问题。
 
@@ -182,3 +182,4 @@ powershell -ExecutionPolicy Bypass -File .\start_backend.ps1
 ## 9. 结论
 
 本阶段已经补上 B 端最关键的页面和联调工作，使 A 端能力能够被真实页面调用和展示。项目当前已经从“只有接口可测”推进到“前后端串联可演示”的阶段。
+

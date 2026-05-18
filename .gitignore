@@ -16,6 +16,7 @@ data/generated/
 build/
 dist/
 .playwright-cli/
+output/
 .gradle/
 local.properties
 

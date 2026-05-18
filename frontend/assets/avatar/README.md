@@ -3,7 +3,7 @@
 本目录包含项目自制默认数字人立绘：
 
 ```text
-frontend/assets/avatar/default-guide-avatar.png
+frontend/assets/avatar/avatar-guide-v1.png
 ```
 
 如果已经获得角色权利方的明确授权，也可将授权角色立绘保存为：

@@ -60,7 +60,7 @@ def ensure_runtime_schema() -> None:
         return
 
     column_defaults = {
-        "avatar_asset_url": "VARCHAR(500) DEFAULT '/app/assets/avatar/default-guide-avatar.png'",
+        "avatar_asset_url": "VARCHAR(500) DEFAULT '/app/assets/avatar/avatar-guide-v1.png'",
         "video_provider_status": "VARCHAR(100) DEFAULT '外部视频 API'",
         "fallback_message": "TEXT DEFAULT '数字人视频暂不可用，已切换为语音讲解。'",
         "service_boundary": "TEXT DEFAULT '仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。'",

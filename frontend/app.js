@@ -8,11 +8,12 @@ const state = {
   adminToken: localStorage.getItem("scenic_admin_token") || "",
   digitalHuman: null,
   selectedDocId: null,
+  guideMode: "qa",
 };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
-const DEFAULT_AVATAR_URL = "./assets/avatar/default-guide-avatar.png";
+const DEFAULT_AVATAR_URL = "./assets/avatar/avatar-guide-v1.png";
 const LEGACY_LICENSED_AVATAR_URL = "./assets/avatar/licensed-character.png";
 const runtimeParams = new URLSearchParams(window.location.search);
 const runtimeClient = (runtimeParams.get("client") || "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
@@ -689,6 +690,21 @@ function addMessage(type, html, extraClass = "") {
   return node;
 }
 
+function renderRouteCard(data) {
+  return `
+    <article class="route-card">
+      <div>
+        <p class="eyebrow">推荐路线</p>
+        <h3>${escapeHtml(data.route_name)}</h3>
+      </div>
+      <div class="route-steps">
+        ${data.route_spots.map((spot, index) => `<span class="route-step">${index + 1}. ${escapeHtml(spot)}</span>`).join("")}
+      </div>
+      <p>${escapeHtml(data.reason)}</p>
+    </article>
+  `;
+}
+
 function renderReferenceTags(references = []) {
   if (!references.length) {
     return "";
@@ -790,6 +806,45 @@ async function askText(question) {
   } catch (error) {
     loading.remove();
     setGuideState("问答失败", "请检查后端服务是否正常运行。");
+    setPetSpeech("需要重试");
+    setPetMode(null);
+    showToast(error.message, "error");
+  }
+}
+
+async function askRouteLecture(question) {
+  const trimmed = question.trim() || "半天 初次游客";
+  addMessage("user", escapeHtml(trimmed));
+  const loading = addMessage("assistant", "正在生成适合初次游客的路线讲解...", "loading");
+  elements.questionInput.value = "";
+  setGuideState("正在规划路线", "系统正在匹配当前景区的预设路线。");
+  setPetSpeech("路线规划中");
+  setPetMode("thinking");
+
+  try {
+    const data = await apiFetch("/api/recommend/route", {
+      method: "POST",
+      body: JSON.stringify({
+        interest: trimmed,
+        duration: trimmed,
+      }),
+    });
+    loading.remove();
+    elements.routeResult.className = "route-result";
+    elements.routeResult.innerHTML = renderRouteCard(data);
+    addMessage(
+      "assistant",
+      `
+        <strong>路线讲解</strong>
+        ${renderRouteCard(data)}
+      `
+    );
+    setGuideState("已生成路线", data.route_name);
+    setPetSpeech("路线已生成");
+    setPetMode("success");
+  } catch (error) {
+    loading.remove();
+    setGuideState("路线生成失败", "请检查后端服务是否正常运行。");
     setPetSpeech("需要重试");
     setPetMode(null);
     showToast(error.message, "error");
@@ -990,18 +1045,7 @@ async function recommendRoute() {
     });
 
     elements.routeResult.className = "route-result";
-    elements.routeResult.innerHTML = `
-      <article class="route-card">
-        <div>
-          <p class="eyebrow">推荐路线</p>
-          <h3>${escapeHtml(data.route_name)}</h3>
-        </div>
-        <div class="route-steps">
-          ${data.route_spots.map((spot, index) => `<span class="route-step">${index + 1}. ${escapeHtml(spot)}</span>`).join("")}
-        </div>
-        <p>${escapeHtml(data.reason)}</p>
-      </article>
-    `;
+    elements.routeResult.innerHTML = renderRouteCard(data);
   } catch (error) {
     elements.routeResult.className = "route-result empty-state";
     elements.routeResult.textContent = "路线生成失败。";
@@ -1643,6 +1687,7 @@ function bindEvents() {
       button.classList.add("active");
       const question = button.dataset.question || "";
       const mode = button.dataset.guideMode || "qa";
+      state.guideMode = mode;
       const placeholders = {
         qa: "输入你的问题，例如：九龙灌浴几点开始表演",
         route: "输入路线需求，例如：半天、亲子、避开人流",
@@ -1660,6 +1705,10 @@ function bindEvents() {
 
   elements.textChatForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (state.guideMode === "route") {
+      askRouteLecture(elements.questionInput.value);
+      return;
+    }
     askText(elements.questionInput.value);
   });
 

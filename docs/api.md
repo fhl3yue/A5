@@ -1,4 +1,4 @@
-# A端接口文档
+﻿# A端接口文档
 
 ## 1. 基础信息
 
@@ -204,7 +204,7 @@
   "outfit_theme": "ling-shan",
   "voice_name": "zh-CN-XiaoxiaoNeural",
   "greeting": "当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。",
-  "avatar_asset_url": "/app/assets/avatar/default-guide-avatar.png",
+  "avatar_asset_url": "/app/assets/avatar/avatar-guide-v1.png",
   "video_provider_status": "外部视频 API",
   "fallback_message": "数字人视频暂不可用，已切换为语音讲解。",
   "service_boundary": "仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。"
@@ -262,3 +262,4 @@ POST {DIGITAL_VIDEO_BASE_URL}/api/digital-video/generate
   "message": "ok"
 }
 ```
+

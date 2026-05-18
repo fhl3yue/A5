@@ -75,7 +75,7 @@ class DigitalHumanConfig(Base):
     outfit_theme: Mapped[str] = mapped_column(String(50), default="ling-shan")
     voice_name: Mapped[str] = mapped_column(String(100), default="zh-CN-XiaoxiaoNeural")
     greeting: Mapped[str] = mapped_column(Text, default="当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。")
-    avatar_asset_url: Mapped[str] = mapped_column(String(500), default="/app/assets/avatar/default-guide-avatar.png")
+    avatar_asset_url: Mapped[str] = mapped_column(String(500), default="/app/assets/avatar/avatar-guide-v1.png")
     video_provider_status: Mapped[str] = mapped_column(String(100), default="外部视频 API")
     fallback_message: Mapped[str] = mapped_column(Text, default="数字人视频暂不可用，已切换为语音讲解。")
     service_boundary: Mapped[str] = mapped_column(

@@ -114,7 +114,7 @@ class DigitalHumanConfigData(BaseModel):
     outfit_theme: str = Field(min_length=1, max_length=50)
     voice_name: str = Field(min_length=1, max_length=100)
     greeting: str = Field(min_length=1, max_length=300)
-    avatar_asset_url: str = Field(default="/app/assets/avatar/default-guide-avatar.png", max_length=500)
+    avatar_asset_url: str = Field(default="/app/assets/avatar/avatar-guide-v1.png", max_length=500)
     video_provider_status: str = Field(default="外部视频 API", max_length=100)
     fallback_message: str = Field(default="数字人视频暂不可用，已切换为语音讲解。", min_length=1, max_length=300)
     service_boundary: str = Field(

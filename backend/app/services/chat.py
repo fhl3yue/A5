@@ -14,6 +14,7 @@ from app.utils import normalize_text, overlap_score, to_simplified_chinese
 
 POSITIVE_HINTS = ("谢谢", "不错", "喜欢", "推荐", "怎么游", "历史", "文化", "亮点")
 NEGATIVE_HINTS = ("不好", "失望", "投诉", "差", "不行", "麻烦", "卡", "崩溃")
+ETIQUETTE_HINTS = ("礼仪", "礼貌", "注意", "禁忌", "规矩", "拍照", "殿堂", "寺院", "文明", "尊重", "秩序")
 
 
 def infer_emotion(text: str) -> str:
@@ -84,6 +85,21 @@ def format_spot_answer(spot: ScenicSpot) -> str:
     return "".join(parts)
 
 
+def is_etiquette_question(question: str) -> bool:
+    return any(token in question for token in ETIQUETTE_HINTS)
+
+
+def format_etiquette_answer(scenic_area: str) -> str:
+    area = scenic_area or "景区"
+    return (
+        f"参观{area}时建议注意四点文化礼仪："
+        "第一，进入殿堂、展馆、演出区域前先看现场标识，拍照、录音和使用闪光灯以现场提示为准；"
+        "第二，在寺院、佛教文化展示区和室内展陈空间保持安静，不攀爬、不触摸展品或供奉设施；"
+        "第三，排队礼让，服装整洁，遇到法会、演出或人流管控时听从工作人员指引；"
+        "第四，把祈愿和参观理解为文化体验，不宣称功德收益、神迹保证或占卜预测。"
+    )
+
+
 def call_llm_with_context(question: str, references: list[KnowledgeChunk]) -> str | None:
     if not (settings.model_api_key and settings.model_base_url and settings.model_name):
         return None
@@ -129,11 +145,19 @@ def fallback_answer(question: str, references: list[KnowledgeChunk], spot: Sceni
 def answer_question(db: Session, question: str, user_id: str = "guest") -> dict:
     started = time.perf_counter()
     question = normalize_text(question)
-    spot = match_spot(db, question)
-    references = build_references(db, question, spot, top_k=3)
-    answer = to_simplified_chinese(call_llm_with_context(question, references) or fallback_answer(question, references, spot))
-    emotion = infer_emotion(question)
     digital_human = get_or_create_config(db)
+    emotion = infer_emotion(question)
+
+    if is_etiquette_question(question):
+        references: list[KnowledgeChunk] = []
+        reference_titles = ["文化礼仪提示"]
+        answer = format_etiquette_answer(digital_human.scenic_area)
+    else:
+        spot = match_spot(db, question)
+        references = build_references(db, question, spot, top_k=3)
+        answer = to_simplified_chinese(call_llm_with_context(question, references) or fallback_answer(question, references, spot))
+        reference_titles = [to_simplified_chinese(item.title) for item in references]
+
     audio_url = generate_tts_audio(answer, digital_human.voice_name)
     digital_video = generate_digital_video(answer, audio_url)
     elapsed = round(time.perf_counter() - started, 3)
@@ -142,7 +166,7 @@ def answer_question(db: Session, question: str, user_id: str = "guest") -> dict:
         user_id=user_id,
         question=question,
         answer=answer,
-        source_titles="|".join(to_simplified_chinese(item.title) for item in references),
+        source_titles="|".join(reference_titles),
         emotion=emotion,
         response_seconds=elapsed,
     )
@@ -157,6 +181,6 @@ def answer_question(db: Session, question: str, user_id: str = "guest") -> dict:
         "video_url": digital_video.video_url,
         "video_status": digital_video.video_status,
         "emotion": emotion,
-        "reference": [to_simplified_chinese(item.title) for item in references],
+        "reference": reference_titles,
         "response_seconds": elapsed,
     }
