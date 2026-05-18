@@ -14,6 +14,9 @@ This workspace contains the A-side backend for the Scenic AI Guide competition p
 - TTS audio URL generation
 - Frontend handoff API docs
 - Built-in visitor/admin web frontend
+- Digital human avatar asset management
+- External digital human video API adapter with audio fallback
+- Android APK cloud build workflow
 
 ## Quick start
 
@@ -31,7 +34,7 @@ powershell -ExecutionPolicy Bypass -File .\start_backend.ps1
 ## Low-device clients
 
 - Windows cloud client: `powershell -ExecutionPolicy Bypass -File .\scripts\build_windows_cloud_client.ps1`
-- Android WebView APK: run GitHub Actions workflow `Build Android APK`; local fallback is `powershell -ExecutionPolicy Bypass -File .\scripts\build_android_webview.ps1`
+- Android WebView APK: run GitHub Actions workflow `Build Android APK`, enter the HTTPS app URL, then download the `app-debug.apk` artifact
 
 After startup, open:
 

@@ -19,6 +19,8 @@ from app.schemas import (
     DashboardResponse,
     DigitalHumanConfigData,
     DigitalHumanConfigResponse,
+    DigitalVideoStatusData,
+    DigitalVideoStatusResponse,
     FeedbackRequest,
     KnowledgeChunkCreateRequest,
     KnowledgeChunkItem,
@@ -42,6 +44,7 @@ from app.schemas import (
 from app.services.analytics import build_dashboard, build_visitor_report
 from app.services.chat import answer_question
 from app.services.digital_human import get_or_create_config, serialize_config, update_config
+from app.services.digital_video import get_digital_video_status
 from app.services.knowledge import import_docx_document, import_plain_text_document, import_xlsx_rows
 from app.services.routes import recommend_route
 from app.services.speech import transcribe_audio_file
@@ -50,6 +53,27 @@ from app.utils import refine_voice_question, to_simplified_chinese
 
 ensure_runtime_dirs()
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_runtime_schema() -> None:
+    if engine.dialect.name != "sqlite":
+        return
+
+    column_defaults = {
+        "avatar_asset_url": "VARCHAR(500) DEFAULT '/app/assets/avatar/default-guide-avatar.png'",
+        "video_provider_status": "VARCHAR(100) DEFAULT '外部视频 API'",
+        "fallback_message": "TEXT DEFAULT '数字人视频暂不可用，已切换为语音讲解。'",
+        "service_boundary": "TEXT DEFAULT '仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。'",
+    }
+    with engine.begin() as connection:
+        rows = connection.exec_driver_sql("PRAGMA table_info(digital_human_configs)").fetchall()
+        existing_columns = {row[1] for row in rows}
+        for column_name, definition in column_defaults.items():
+            if column_name not in existing_columns:
+                connection.exec_driver_sql(f"ALTER TABLE digital_human_configs ADD COLUMN {column_name} {definition}")
+
+
+ensure_runtime_schema()
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
 app.add_middleware(
@@ -60,9 +84,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/generated/audio", StaticFiles(directory=settings.audio_output_dir), name="generated-audio")
+app.mount("/generated/avatar", StaticFiles(directory=settings.avatar_output_dir), name="generated-avatar")
 frontend_dir = BASE_DIR / "frontend"
 if frontend_dir.exists():
     app.mount("/app", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+
+
+ALLOWED_AVATAR_SUFFIXES = {".png", ".webp", ".avif", ".gif", ".jpg", ".jpeg"}
 
 
 def document_to_item(db: Session, document: KnowledgeDocument) -> KnowledgeDocumentItem:
@@ -281,6 +309,31 @@ def admin_visitor_report(db: Session = Depends(get_db)):
 def update_digital_human_config(payload: DigitalHumanConfigData, db: Session = Depends(get_db)):
     config = update_config(db, payload.model_dump())
     return DigitalHumanConfigResponse(data=DigitalHumanConfigData(**serialize_config(config)))
+
+
+@app.post("/api/admin/digital-human/avatar", response_model=DigitalHumanConfigResponse)
+def upload_digital_human_avatar(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in ALLOWED_AVATAR_SUFFIXES:
+        raise HTTPException(status_code=400, detail="数字人形象支持 PNG、WebP、AVIF、GIF、JPG/JPEG；透明背景优先使用 PNG、WebP、AVIF 或 GIF。")
+
+    destination = settings.avatar_output_dir / f"digital-human-avatar-{uuid4().hex}{suffix}"
+    with destination.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    config = update_config(
+        db,
+        {
+            "avatar_asset_url": f"/generated/avatar/{destination.name}",
+            "outfit_theme": "asset-avatar",
+        },
+    )
+    return DigitalHumanConfigResponse(data=DigitalHumanConfigData(**serialize_config(config)))
+
+
+@app.get("/api/admin/digital-video/status", response_model=DigitalVideoStatusResponse)
+def digital_video_status():
+    return DigitalVideoStatusResponse(data=DigitalVideoStatusData(**get_digital_video_status()))
 
 
 @app.get("/api/admin/docs", response_model=KnowledgeDocumentsResponse)

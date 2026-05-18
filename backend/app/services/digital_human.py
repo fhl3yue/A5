@@ -8,9 +8,13 @@ DEFAULT_CONFIG = {
     "name": "灵灵",
     "role_title": "景区 AI 导览员",
     "scenic_area": "灵山胜境",
-    "outfit_theme": "ling-shan",
+    "outfit_theme": "asset-avatar",
     "voice_name": "zh-CN-XiaoxiaoNeural",
     "greeting": "当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。",
+    "avatar_asset_url": "/app/assets/avatar/default-guide-avatar.png",
+    "video_provider_status": "外部视频 API",
+    "fallback_message": "数字人视频暂不可用，已切换为语音讲解。",
+    "service_boundary": "仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。",
 }
 
 
@@ -34,6 +38,10 @@ def serialize_config(config: DigitalHumanConfig) -> dict:
         "outfit_theme": config.outfit_theme,
         "voice_name": config.voice_name,
         "greeting": config.greeting,
+        "avatar_asset_url": config.avatar_asset_url,
+        "video_provider_status": config.video_provider_status,
+        "fallback_message": config.fallback_message,
+        "service_boundary": config.service_boundary,
     }
 
 

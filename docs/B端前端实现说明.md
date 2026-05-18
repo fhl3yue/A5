@@ -40,9 +40,9 @@
 13. 当前示范景区提示
 14. 路线推荐自定义兴趣与自定义时长输入
 
-其中数字人展示区已经由早期占位头像升级为原创类 Live2D 分层虚拟导览员，包含完整头身、大眼虚拟偶像化面部、分层发丝、半透明衣袖、导览标识、状态气泡、待机漂浮、悬停挥手、发丝摆动和播报口型动画。
+其中数字人展示区已支持自制或明确授权的 PNG/WebP/AVIF/GIF/JPG 图片形象素材，透明背景优先，默认内置项目自制 `frontend/assets/avatar/default-guide-avatar.png`。外部视频服务返回 `video_status=ready` 时优先播放数字人视频，失败时回退音频和前端动效。
 
-同时预留了“授权角色素材”模式。若项目获得第三方角色授权，可将透明 PNG 素材放置为 `frontend/assets/avatar/licensed-character.png`，再在后台数字人形象管理中选择“授权角色素材”。
+游客端新增讲解模式入口：问答讲解、路线讲解、景点讲解、礼仪提示。点击后会切换输入提示并填入对应讲解问题。
 
 ### 3.2 管理端页面
 
@@ -62,6 +62,9 @@
 12. 数字人服装主题配置
 13. 数字人语音声线配置
 14. 数字人欢迎语配置
+15. 数字人图片形象素材上传
+16. 数字人视频服务状态查看
+17. 服务边界文案和视频回退提示配置
 
 ## 4. 已接入接口
 
@@ -78,6 +81,8 @@
 9. `GET /api/health`
 10. `GET /api/digital-human/config`
 11. `POST /api/admin/digital-human/config`
+12. `POST /api/admin/digital-human/avatar`
+13. `GET /api/admin/digital-video/status`
 
 ## 5. 前后端串联流程
 
@@ -121,12 +126,13 @@
 
 1. 管理员进入管理端数字人形象管理区域
 2. 设置数字人名称、角色身份和示范景区
-3. 选择服装主题，包括灵山青绿、文旅金、湖畔蓝、节庆红
+3. 选择服装主题，包括自制/授权立绘、灵山青绿、文旅金、湖畔蓝、节庆红
 4. 选择语音声线，包括晓晓、云希、晓伊、云健等中文声线
-5. 修改欢迎语
-6. 点击保存后调用 `/api/admin/digital-human/config`
-7. 游客端通过 `/api/digital-human/config` 读取配置并更新角色展示
-8. 后端语音合成会使用保存后的声线配置
+5. 上传 PNG/WebP/AVIF/GIF/JPG 数字人形象素材，透明背景优先
+6. 修改欢迎语、视频回退提示和服务边界文案
+7. 点击保存后调用 `/api/admin/digital-human/config`
+8. 游客端通过 `/api/digital-human/config` 读取配置并更新角色展示
+9. 后端语音合成会使用保存后的声线配置
 
 ## 6. 使用方法
 
@@ -165,7 +171,7 @@ powershell -ExecutionPolicy Bypass -File .\start_backend.ps1
 
 当前前端属于参赛演示版，仍存在以下可优化空间：
 
-1. 数字人形象目前为原创 SVG/CSS 类 Live2D 分层动效角色，不是 3D 数字人，也不是 Live2D Cubism SDK 模型
+1. 默认数字人形象是项目自制透明 PNG 立绘，不是 3D 数字人，也不是 Live2D Cubism SDK 模型
 2. 图表为轻量 CSS 展示，没有接入 ECharts
 3. 管理端登录为演示 token，没有完整权限体系
 4. 景区配置目前以展示和知识文档上传为主，还没有完整的多景区切换表单

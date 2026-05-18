@@ -1,6 +1,12 @@
 # 授权角色素材放置说明
 
-如果已经获得角色权利方的明确授权，可将授权角色立绘保存为：
+本目录包含项目自制默认数字人立绘：
+
+```text
+frontend/assets/avatar/default-guide-avatar.png
+```
+
+如果已经获得角色权利方的明确授权，也可将授权角色立绘保存为：
 
 ```text
 frontend/assets/avatar/licensed-character.png
@@ -8,10 +14,10 @@ frontend/assets/avatar/licensed-character.png
 
 要求：
 
-- 建议使用透明背景 PNG 或 WebP 转 PNG。
+- 建议优先使用透明背景 PNG、WebP、AVIF 或 GIF；也支持 JPG/JPEG，但照片背景会一并显示。
 - 建议高度大于 900px，便于高清展示。
-- 文件名必须为 `licensed-character.png`。
-- 后台“数字人形象管理”中将“服装主题”选择为“授权角色素材”后，游客端会优先展示该文件。
+- 文件名可为 `licensed-character.png`，也可直接在后台“数字人素材管理”上传。
+- 后台上传后会自动更新当前数字人的 `avatar_asset_url`，游客端优先展示该素材。
 
 注意：
 

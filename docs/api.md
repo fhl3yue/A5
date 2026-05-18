@@ -203,9 +203,25 @@
   "scenic_area": "灵山胜境",
   "outfit_theme": "ling-shan",
   "voice_name": "zh-CN-XiaoxiaoNeural",
-  "greeting": "当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。"
+  "greeting": "当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。",
+  "avatar_asset_url": "/app/assets/avatar/default-guide-avatar.png",
+  "video_provider_status": "外部视频 API",
+  "fallback_message": "数字人视频暂不可用，已切换为语音讲解。",
+  "service_boundary": "仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。"
 }
 ```
+
+### 12.3 上传数字人形象素材
+
+- 地址：`POST /api/admin/digital-human/avatar`
+- 表单参数：`file`
+- 支持格式：PNG、WebP、AVIF、GIF、JPG/JPEG；透明背景优先使用 PNG、WebP、AVIF 或 GIF
+- 返回：更新后的数字人配置，`avatar_asset_url` 会指向已上传素材
+
+### 12.4 数字人视频服务状态
+
+- 地址：`GET /api/admin/digital-video/status`
+- 用途：展示启用状态、最近状态、平均耗时、回退次数和最近失败原因
 
 ## 13. 外部数字人视频服务协议
 

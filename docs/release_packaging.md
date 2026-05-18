@@ -97,33 +97,9 @@ app-debug.apk
 
 该 APK 可用于演示、测试和队友复现；正式分发前再配置 release keystore 并构建签名 release 包。
 
-## 5. Android WebView APK 本地构建
+## 5. Android WebView APK 本地职责边界
 
-配置：
-
-```text
-android-webview\app\src\main\res\values\strings.xml
-```
-
-把 `scenic_app_url` 改成：
-
-```text
-https://your-domain.example/app/?client=android
-```
-
-构建：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build_android_webview.ps1
-```
-
-默认输出：
-
-```text
-android-webview\app\build\outputs\apk\debug\app-debug.apk
-```
-
-本地构建需要 JDK 17、Android SDK 和 Gradle；当前推荐优先使用 GitHub Actions 云构建。
+APK 统一由 GitHub Actions 产出，本机只负责开发、静态检查和云端 URL 配置确认。本机不要求安装 Android SDK、Gradle、`adb` 或 `sdkmanager`。
 
 ## 6. 本地完整演示包
 
@@ -147,7 +123,8 @@ dist\scenic-ai-guide-demo
 - 文本问答返回 `audio_url`，开启数字人视频后返回 `video_status`。
 - `video_status=ready` 时游客端播放视频；`timeout/error/disabled` 时自动回退音频。
 - APK 可打开游客端、录音、问答和播放视频。
-- 数字人形象素材必须为自制或已授权素材。
+- 数字人形象素材必须为自制或已授权素材；后台“数字人素材管理”支持 PNG/WebP/AVIF/GIF/JPG，透明背景优先。
+- 管理端 `GET /api/admin/digital-video/status` 应能显示启用状态、最近失败原因、平均耗时和回退次数。
 
 ## 8. 本地 mock 数字人视频服务
 

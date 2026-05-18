@@ -12,7 +12,8 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
-const LICENSED_AVATAR_URL = "./assets/avatar/licensed-character.png";
+const DEFAULT_AVATAR_URL = "./assets/avatar/default-guide-avatar.png";
+const LEGACY_LICENSED_AVATAR_URL = "./assets/avatar/licensed-character.png";
 const runtimeParams = new URLSearchParams(window.location.search);
 const runtimeClient = (runtimeParams.get("client") || "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
 
@@ -358,7 +359,21 @@ const elements = {
   dhScenicInput: $("#dhScenicInput"),
   dhOutfitSelect: $("#dhOutfitSelect"),
   dhVoiceSelect: $("#dhVoiceSelect"),
+  dhAvatarAssetUrlInput: $("#dhAvatarAssetUrlInput"),
   dhGreetingInput: $("#dhGreetingInput"),
+  dhFallbackMessageInput: $("#dhFallbackMessageInput"),
+  dhServiceBoundaryInput: $("#dhServiceBoundaryInput"),
+  avatarUploadForm: $("#avatarUploadForm"),
+  avatarUploadInput: $("#avatarUploadInput"),
+  refreshVideoStatusButton: $("#refreshVideoStatusButton"),
+  videoProviderEnabled: $("#videoProviderEnabled"),
+  videoProviderLastStatus: $("#videoProviderLastStatus"),
+  videoProviderAverage: $("#videoProviderAverage"),
+  videoProviderFallbacks: $("#videoProviderFallbacks"),
+  videoProviderFailure: $("#videoProviderFailure"),
+  visitorVideoStatus: $("#visitorVideoStatus"),
+  visitorFallbackMessage: $("#visitorFallbackMessage"),
+  visitorServiceBoundary: $("#visitorServiceBoundary"),
   toast: $("#toast"),
 };
 
@@ -479,6 +494,7 @@ function docDisplayName(doc) {
 
 function themeClass(outfitTheme) {
   const classes = {
+    "asset-avatar": "theme-asset-avatar",
     "heritage-gold": "theme-heritage-gold",
     "lake-blue": "theme-lake-blue",
     "festival-red": "theme-festival-red",
@@ -495,6 +511,10 @@ function readDigitalHumanForm() {
     outfit_theme: elements.dhOutfitSelect.value,
     voice_name: elements.dhVoiceSelect.value,
     greeting: elements.dhGreetingInput.value.trim(),
+    avatar_asset_url: elements.dhAvatarAssetUrlInput.value.trim(),
+    fallback_message: elements.dhFallbackMessageInput.value.trim(),
+    service_boundary: elements.dhServiceBoundaryInput.value.trim(),
+    video_provider_status: "外部视频 API",
   };
 }
 
@@ -507,7 +527,10 @@ function fillDigitalHumanForm(config) {
   elements.dhScenicInput.value = config.scenic_area || "灵山胜境";
   elements.dhOutfitSelect.value = config.outfit_theme || "ling-shan";
   elements.dhVoiceSelect.value = config.voice_name || "zh-CN-XiaoxiaoNeural";
+  elements.dhAvatarAssetUrlInput.value = config.avatar_asset_url || DEFAULT_AVATAR_URL;
   elements.dhGreetingInput.value = config.greeting || "";
+  elements.dhFallbackMessageInput.value = config.fallback_message || "数字人视频暂不可用，已切换为语音讲解。";
+  elements.dhServiceBoundaryInput.value = config.service_boundary || "仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。";
 }
 
 function applyDigitalHumanConfig(config) {
@@ -515,16 +538,23 @@ function applyDigitalHumanConfig(config) {
     return;
   }
   state.digitalHuman = config;
-  document.body.classList.remove("theme-heritage-gold", "theme-lake-blue", "theme-festival-red", "theme-licensed-asset");
+  document.body.classList.remove("theme-asset-avatar", "theme-heritage-gold", "theme-lake-blue", "theme-festival-red", "theme-licensed-asset");
   const nextTheme = themeClass(config.outfit_theme);
   if (nextTheme) {
     document.body.classList.add(nextTheme);
   }
-  syncLicensedAvatarAsset(config.outfit_theme === "licensed-asset");
+  const assetUrl = config.avatar_asset_url || (config.outfit_theme === "licensed-asset" ? LEGACY_LICENSED_AVATAR_URL : "");
+  syncLicensedAvatarAsset(assetUrl);
 
   elements.petNameplate.textContent = `${config.name} · ${config.role_title}`;
   elements.petSpeech.textContent = `${config.scenic_area}导览中`;
   elements.guideSubtitle.textContent = config.greeting;
+  if (elements.visitorFallbackMessage) {
+    elements.visitorFallbackMessage.textContent = config.fallback_message || "失败自动回退";
+  }
+  if (elements.visitorServiceBoundary) {
+    elements.visitorServiceBoundary.textContent = config.service_boundary || "知识库生成";
+  }
 
   if (elements.configScenicArea) {
     elements.configScenicArea.textContent = config.scenic_area;
@@ -547,28 +577,20 @@ function bindLicensedAvatarAsset() {
   });
 }
 
-async function syncLicensedAvatarAsset(enabled) {
+async function syncLicensedAvatarAsset(assetUrl) {
   if (!elements.licensedAvatarImage) {
     return;
   }
-  if (!enabled) {
+  if (!assetUrl) {
     elements.licensedAvatarImage.removeAttribute("src");
     document.body.classList.remove("licensed-avatar-ready");
     return;
   }
 
-  try {
-    const response = await fetch(LICENSED_AVATAR_URL, { method: "HEAD", cache: "no-store" });
-    if (!response.ok) {
-      elements.licensedAvatarImage.removeAttribute("src");
-      document.body.classList.remove("licensed-avatar-ready");
-      return;
-    }
-    elements.licensedAvatarImage.src = `${LICENSED_AVATAR_URL}?v=${Date.now()}`;
-  } catch {
-    elements.licensedAvatarImage.removeAttribute("src");
-    document.body.classList.remove("licensed-avatar-ready");
-  }
+  document.body.classList.add("theme-asset-avatar");
+  const resolved = resolveMediaUrl(assetUrl);
+  const separator = resolved.includes("?") ? "&" : "?";
+  elements.licensedAvatarImage.src = `${resolved}${separator}v=${Date.now()}`;
 }
 
 async function loadDigitalHumanConfig() {
@@ -582,7 +604,7 @@ async function loadDigitalHumanConfig() {
 
 async function saveDigitalHumanConfig() {
   const config = readDigitalHumanForm();
-  if (!config.name || !config.role_title || !config.scenic_area || !config.greeting) {
+  if (!config.name || !config.role_title || !config.scenic_area || !config.greeting || !config.fallback_message || !config.service_boundary) {
     showToast("请填写完整的数字人配置。", "error");
     return;
   }
@@ -596,6 +618,54 @@ async function saveDigitalHumanConfig() {
     showToast("数字人配置已保存。");
   } catch (error) {
     showToast(error.message, "error");
+  }
+}
+
+async function uploadAvatarAsset() {
+  const file = elements.avatarUploadInput.files?.[0];
+  if (!file) {
+    showToast("请先选择 PNG、WebP、AVIF、GIF 或 JPG 形象素材。", "error");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const saved = await apiFetch("/api/admin/digital-human/avatar", {
+      method: "POST",
+      body: formData,
+    });
+    elements.avatarUploadInput.value = "";
+    applyDigitalHumanConfig(saved);
+    showToast("数字人形象素材已上传。");
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+}
+
+async function loadDigitalVideoStatus({ silent = true } = {}) {
+  if (!elements.videoProviderEnabled) {
+    return;
+  }
+  try {
+    const status = await apiFetch("/api/admin/digital-video/status");
+    renderDigitalVideoStatus(status);
+  } catch (error) {
+    if (!silent) {
+      showToast(error.message, "error");
+    }
+  }
+}
+
+function renderDigitalVideoStatus(status) {
+  const enabledText = status.enabled ? (status.configured ? "已启用" : "未配置地址") : "未启用";
+  elements.videoProviderEnabled.textContent = enabledText;
+  elements.videoProviderLastStatus.textContent = status.last_status || "-";
+  elements.videoProviderAverage.textContent = `${Number(status.average_response_seconds || 0).toFixed(2)}s`;
+  elements.videoProviderFallbacks.textContent = status.fallback_count ?? 0;
+  elements.videoProviderFailure.textContent = status.last_failure_reason || status.last_message || "无";
+  if (elements.visitorVideoStatus) {
+    elements.visitorVideoStatus.textContent = status.enabled ? "外部视频优先" : "当前回退音频";
   }
 }
 
@@ -841,9 +911,10 @@ function playDigitalVideo(url, fallbackAudioUrl = "") {
     stopVideoPlayback();
     unmarkSpeaking();
     if (fallbackAudioUrl) {
+      setGuideState("切换语音讲解", state.digitalHuman?.fallback_message || "数字人视频暂不可用，已切换为语音讲解。");
       playAudio(fallbackAudioUrl);
     } else {
-      showToast("数字人视频播放失败。", "error");
+      showToast(state.digitalHuman?.fallback_message || "数字人视频播放失败。", "error");
     }
   };
   elements.avatarFrame.classList.add("video-active");
@@ -854,6 +925,7 @@ function playDigitalVideo(url, fallbackAudioUrl = "") {
     stopVideoPlayback();
     unmarkSpeaking();
     if (fallbackAudioUrl) {
+      setGuideState("切换语音讲解", state.digitalHuman?.fallback_message || "数字人视频暂不可用，已切换为语音讲解。");
       playAudio(fallbackAudioUrl);
     } else {
       showToast(`数字人视频播放失败：${error.message}`, "error");
@@ -999,16 +1071,18 @@ async function loadAdminData({ silent = false } = {}) {
   }
 
   try {
-    const [dashboard, report, logs, docs] = await Promise.all([
+    const [dashboard, report, logs, docs, videoStatus] = await Promise.all([
       apiFetch("/api/admin/dashboard"),
       apiFetch("/api/admin/visitor-report"),
       apiFetch("/api/admin/logs?limit=50"),
       apiFetch("/api/admin/docs"),
+      apiFetch("/api/admin/digital-video/status"),
     ]);
     renderDashboard(dashboard);
     renderVisitorReport(report);
     renderLogs(logs);
     renderKnowledgeDocs(docs);
+    renderDigitalVideoStatus(videoStatus);
     if (!silent) {
       showToast("后台数据已刷新。");
     }
@@ -1563,6 +1637,27 @@ function bindEvents() {
     });
   });
 
+  $$(".guide-mode-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      $$(".guide-mode-button").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      const question = button.dataset.question || "";
+      const mode = button.dataset.guideMode || "qa";
+      const placeholders = {
+        qa: "输入你的问题，例如：九龙灌浴几点开始表演",
+        route: "输入路线需求，例如：半天、亲子、避开人流",
+        spot: "输入景点名称，例如：灵山大佛、梵宫、九龙灌浴",
+        etiquette: "输入礼仪问题，例如：殿堂拍照需要注意什么",
+      };
+      elements.questionInput.placeholder = placeholders[mode] || placeholders.qa;
+      if (question) {
+        elements.questionInput.value = question;
+      }
+      elements.questionInput.focus();
+      setPetSpeech(button.textContent.trim());
+    });
+  });
+
   elements.textChatForm.addEventListener("submit", (event) => {
     event.preventDefault();
     askText(elements.questionInput.value);
@@ -1618,10 +1713,16 @@ function bindEvents() {
   elements.refreshAdminButton.addEventListener("click", () => loadAdminData());
   elements.reloadLogsButton.addEventListener("click", () => loadAdminData());
   elements.reloadKnowledgeButton.addEventListener("click", () => loadKnowledgeDocs());
+  elements.refreshVideoStatusButton.addEventListener("click", () => loadDigitalVideoStatus({ silent: false }));
 
   elements.uploadForm.addEventListener("submit", (event) => {
     event.preventDefault();
     uploadDocument();
+  });
+
+  elements.avatarUploadForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    uploadAvatarAsset();
   });
 
   elements.knowledgeDocMetaForm.addEventListener("submit", (event) => {
@@ -1683,9 +1784,12 @@ async function boot() {
   bindLicensedAvatarAsset();
   checkApiHealth();
   await loadDigitalHumanConfig();
+  await loadDigitalVideoStatus();
   const config = state.digitalHuman || {
     scenic_area: "灵山胜境",
     greeting: "当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。",
+    fallback_message: "数字人视频暂不可用，已切换为语音讲解。",
+    service_boundary: "仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。",
   };
   addMessage(
     "assistant",

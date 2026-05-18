@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>灵山胜境 AI 数字人导览</title>
-    <link rel="stylesheet" href="./styles.css?v=20260514-rebuild" />
+    <link rel="stylesheet" href="./styles.css?v=20260517-digital-roadmap" />
   </head>
   <body>
     <div class="app-shell">
@@ -182,12 +182,12 @@
                   <img
                     id="licensedAvatarImage"
                     class="licensed-avatar-image"
-                    data-src="./assets/avatar/licensed-character.png"
-                    alt="已授权数字人角色素材"
+                    data-src="./assets/avatar/default-guide-avatar.png"
+                    alt="数字人导览角色素材"
                   />
                   <div class="licensed-avatar-fallback" id="licensedAvatarFallback">
-                    <strong>授权角色素材待放置</strong>
-                    <span>取得正式授权后，将 PNG/WebP 角色立绘保存为 frontend/assets/avatar/licensed-character.png。</span>
+                    <strong>数字人形象素材待配置</strong>
+                    <span>可在后台上传自制或明确授权的图片形象素材，透明背景优先。</span>
                   </div>
                 </div>
                 <div class="digital-video-layer" id="digitalVideoLayer" aria-live="polite">
@@ -219,6 +219,14 @@
                 <span><strong>问答</strong> 文本 / 语音</span>
                 <span><strong>输出</strong> 视频 / 音频</span>
                 <span><strong>场景</strong> 游客端</span>
+              </div>
+
+              <p class="micro-label">讲解模式</p>
+              <div class="guide-mode-tabs" aria-label="讲解模式">
+                <button class="guide-mode-button active" type="button" data-guide-mode="qa" data-question="">问答讲解</button>
+                <button class="guide-mode-button" type="button" data-guide-mode="route" data-question="请按半天行程讲解一条适合初次游客的路线">路线讲解</button>
+                <button class="guide-mode-button" type="button" data-guide-mode="spot" data-question="请讲解灵山大佛的文化含义和参观重点">景点讲解</button>
+                <button class="guide-mode-button" type="button" data-guide-mode="etiquette" data-question="参观灵山胜境需要注意哪些文化礼仪">礼仪提示</button>
               </div>
 
               <p class="micro-label">当前知识库推荐问题</p>
@@ -304,9 +312,9 @@
                 </div>
               </div>
               <div class="service-stack">
-                <span><strong>数字人视频</strong><em>就绪优先播放</em></span>
-                <span><strong>语音问答</strong><em>失败自动回退</em></span>
-                <span><strong>内容边界</strong><em>知识库生成</em></span>
+                <span><strong>数字人视频</strong><em id="visitorVideoStatus">就绪优先播放</em></span>
+                <span><strong>语音问答</strong><em id="visitorFallbackMessage">失败自动回退</em></span>
+                <span><strong>内容边界</strong><em id="visitorServiceBoundary">知识库生成</em></span>
               </div>
             </section>
           </div>
@@ -365,6 +373,7 @@
                 <label>
                   服装主题
                   <select id="dhOutfitSelect">
+                    <option value="asset-avatar">自制/授权立绘</option>
                     <option value="ling-shan">灵山青绿</option>
                     <option value="heritage-gold">文旅金</option>
                     <option value="lake-blue">湖畔蓝</option>
@@ -381,15 +390,53 @@
                     <option value="zh-CN-YunjianNeural">云健：稳重男声</option>
                   </select>
                 </label>
+                <label>
+                  形象素材地址
+                  <input id="dhAvatarAssetUrlInput" type="text" value="/app/assets/avatar/default-guide-avatar.png" />
+                </label>
                 <label class="wide-field">
                   欢迎语
                   <textarea id="dhGreetingInput" rows="3">当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。</textarea>
+                </label>
+                <label class="wide-field">
+                  视频回退提示
+                  <textarea id="dhFallbackMessageInput" rows="2">数字人视频暂不可用，已切换为语音讲解。</textarea>
+                </label>
+                <label class="wide-field">
+                  服务边界文案
+                  <textarea id="dhServiceBoundaryInput" rows="3">仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。</textarea>
                 </label>
                 <div class="form-actions wide-field">
                   <button class="primary-button" type="submit">保存配置</button>
                   <button id="previewDigitalHumanButton" class="ghost-button" type="button">预览到游客端</button>
                 </div>
               </form>
+              <form id="avatarUploadForm" class="avatar-upload-form">
+                <div>
+                  <p class="eyebrow">Avatar Asset</p>
+                  <h3>数字人素材管理</h3>
+                  <p>上传自制或明确授权的 PNG/WebP/AVIF/GIF/JPG，游客端会优先展示该形象。</p>
+                </div>
+                <input id="avatarUploadInput" type="file" accept="image/png,image/webp,image/avif,image/gif,image/jpeg" />
+                <button class="ghost-button" type="submit">上传形象素材</button>
+              </form>
+            </section>
+
+            <section class="admin-panel video-provider-panel">
+              <div class="panel-heading compact">
+                <div>
+                  <p class="eyebrow">Video Provider</p>
+                  <h3>数字人视频服务状态</h3>
+                </div>
+                <button id="refreshVideoStatusButton" class="ghost-button" type="button">刷新状态</button>
+              </div>
+              <div class="video-status-grid">
+                <span>启用状态：<strong id="videoProviderEnabled">待检测</strong></span>
+                <span>最近状态：<strong id="videoProviderLastStatus">-</strong></span>
+                <span>平均耗时：<strong id="videoProviderAverage">0.00s</strong></span>
+                <span>回退次数：<strong id="videoProviderFallbacks">0</strong></span>
+                <span class="wide-field">最近失败：<strong id="videoProviderFailure">无</strong></span>
+              </div>
             </section>
 
             <div class="section-heading">
@@ -590,6 +637,6 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=20260512-video-client" defer></script>
+    <script src="./app.js?v=20260517-digital-roadmap" defer></script>
   </body>
 </html>

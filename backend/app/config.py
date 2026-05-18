@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     generated_data_dir: Path = Field(default=BASE_DIR / "data" / "generated")
     sample_data_dir: Path = Field(default=BASE_DIR / "data" / "sample")
     audio_output_dir: Path = Field(default=BASE_DIR / "data" / "generated" / "audio")
+    avatar_output_dir: Path = Field(default=BASE_DIR / "data" / "generated" / "avatar")
     upload_temp_dir: Path = Field(default=BASE_DIR / "data" / "generated" / "uploads")
 
     @property
@@ -74,6 +75,7 @@ def ensure_runtime_dirs() -> None:
         settings.generated_data_dir,
         settings.sample_data_dir,
         settings.audio_output_dir,
+        settings.avatar_output_dir,
         settings.upload_temp_dir,
     ):
         path.mkdir(parents=True, exist_ok=True)

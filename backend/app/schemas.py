@@ -114,12 +114,38 @@ class DigitalHumanConfigData(BaseModel):
     outfit_theme: str = Field(min_length=1, max_length=50)
     voice_name: str = Field(min_length=1, max_length=100)
     greeting: str = Field(min_length=1, max_length=300)
+    avatar_asset_url: str = Field(default="/app/assets/avatar/default-guide-avatar.png", max_length=500)
+    video_provider_status: str = Field(default="外部视频 API", max_length=100)
+    fallback_message: str = Field(default="数字人视频暂不可用，已切换为语音讲解。", min_length=1, max_length=300)
+    service_boundary: str = Field(
+        default="仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。",
+        min_length=1,
+        max_length=500,
+    )
 
 
 class DigitalHumanConfigResponse(BaseModel):
     code: int = 0
     message: str = "success"
     data: DigitalHumanConfigData
+
+
+class DigitalVideoStatusData(BaseModel):
+    enabled: bool
+    configured: bool
+    avatar_id: str
+    last_status: str
+    last_message: str
+    last_failure_reason: str
+    average_response_seconds: float
+    fallback_count: int
+    total_requests: int
+
+
+class DigitalVideoStatusResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: DigitalVideoStatusData
 
 
 class LoginRequest(BaseModel):

@@ -527,19 +527,23 @@ body.client-android .tab-button[data-view="adminView"] {
   pointer-events: none;
 }
 
+body.theme-asset-avatar .licensed-avatar-layer,
 body.theme-licensed-asset .licensed-avatar-layer {
   display: grid;
 }
 
+body.theme-asset-avatar .pet-character,
 body.theme-licensed-asset .pet-character {
   opacity: 0;
   pointer-events: none;
 }
 
+body.theme-asset-avatar.licensed-avatar-ready .licensed-avatar-image,
 body.theme-licensed-asset.licensed-avatar-ready .licensed-avatar-image {
   display: block;
 }
 
+body.theme-asset-avatar.licensed-avatar-ready .licensed-avatar-fallback,
 body.theme-licensed-asset.licensed-avatar-ready .licensed-avatar-fallback {
   display: none;
 }
@@ -642,6 +646,14 @@ body.theme-licensed-asset.licensed-avatar-ready .licensed-avatar-fallback {
   margin: 10px 0 14px;
 }
 
+.guide-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.guide-mode-button,
 .quick-questions button {
   min-height: 44px;
   padding: 8px 10px;
@@ -652,6 +664,12 @@ body.theme-licensed-asset.licensed-avatar-ready .licensed-avatar-fallback {
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow-wrap: anywhere;
+}
+
+.guide-mode-button.active {
+  color: #17140f;
+  background: linear-gradient(135deg, #ffe7a0, #c99d48);
+  border-color: rgba(255, 235, 170, 0.5);
 }
 
 .chat-messages {
@@ -966,6 +984,7 @@ select {
 }
 
 .digital-human-panel,
+.video-provider-panel,
 .visitor-report-panel,
 .knowledge-panel,
 .upload-panel,
@@ -994,11 +1013,53 @@ select {
 }
 
 .form-actions,
+.avatar-upload-form,
 .doc-actions,
 .chunk-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.avatar-upload-form {
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.avatar-upload-form p {
+  margin-bottom: 0;
+  color: var(--muted-strong);
+  line-height: 1.7;
+}
+
+.avatar-upload-form input {
+  max-width: min(100%, 360px);
+}
+
+.video-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.video-status-grid span {
+  min-width: 0;
+  padding: 12px;
+  color: var(--muted-strong);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.video-status-grid strong {
+  color: var(--gold-soft);
 }
 
 .section-heading {
@@ -1681,10 +1742,12 @@ body.theme-festival-red {
   }
 
   .quick-questions,
+  .guide-mode-tabs,
   .ask-form,
   .route-controls,
   .metric-grid,
   .ops-screen-kpis,
+  .video-status-grid,
   .config-list,
   .digital-human-form,
   .login-form {
@@ -1710,6 +1773,7 @@ body.theme-festival-red {
   }
 
   .form-actions,
+  .avatar-upload-form,
   .doc-actions,
   .chunk-actions,
   .upload-form,

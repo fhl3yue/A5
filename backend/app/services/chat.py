@@ -92,6 +92,7 @@ def call_llm_with_context(question: str, references: list[KnowledgeChunk]) -> st
     system_prompt = (
         "你是景区导览AI数字人。请严格基于给定知识库回答，优先准确，语气自然。"
         "如果知识库没有直接信息，要明确说明没有查到，不要编造。"
+        "不得承诺功德收益、神迹效果、占卜预测、现实保佑结果或医疗财运等确定性结果。"
     )
     user_prompt = f"知识库内容：\n{context}\n\n用户问题：{question}"
 
