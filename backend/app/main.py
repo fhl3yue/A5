@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import BASE_DIR, ensure_runtime_dirs, settings
 from app.database import Base, engine, get_db
-from app.models import AdminUser, KnowledgeChunk, KnowledgeDocument, QALog
+from app.models import AdminUser, KnowledgeChunk, KnowledgeDocument, KnowledgeEmbedding, QALog
 from app.schemas import (
     ChatData,
     ChatRequest,
@@ -35,17 +35,26 @@ from app.schemas import (
     LoginResponse,
     LogItem,
     LogsResponse,
+    RagRebuildData,
+    RagRebuildRequest,
+    RagRebuildResponse,
+    RagStatusData,
+    RagStatusResponse,
     RouteData,
     RouteRequest,
     RouteResponse,
     SimpleResponse,
+    TranslateData,
+    TranslateRequest,
+    TranslateResponse,
     VisitorReportResponse,
 )
 from app.services.analytics import build_dashboard, build_visitor_report
-from app.services.chat import answer_question
+from app.services.chat import answer_question, translate_answer_text
 from app.services.digital_human import get_or_create_config, serialize_config, update_config
 from app.services.digital_video import get_digital_video_status
 from app.services.knowledge import import_docx_document, import_plain_text_document, import_xlsx_rows
+from app.services.rag import rag_status, rebuild_embeddings
 from app.services.routes import recommend_route
 from app.services.speech import transcribe_audio_file
 from app.utils import refine_voice_question, to_simplified_chinese
@@ -267,6 +276,30 @@ def submit_feedback(payload: FeedbackRequest, db: Session = Depends(get_db)):
     return SimpleResponse()
 
 
+@app.post("/api/chat/translate", response_model=TranslateResponse)
+def chat_translate(payload: TranslateRequest, db: Session = Depends(get_db)):
+    text = (payload.text or "").strip()
+    if not text and payload.log_id is not None:
+        log = db.get(QALog, payload.log_id)
+        if log is None:
+            raise HTTPException(status_code=404, detail="未找到对应问答记录。")
+        text = log.answer.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="缺少需要翻译的文本。")
+
+    translation = translate_answer_text(text, payload.target_language)
+    if not translation:
+        raise HTTPException(status_code=503, detail="当前未配置英文回答服务。")
+
+    return TranslateResponse(
+        data=TranslateData(
+            log_id=payload.log_id,
+            target_language=payload.target_language,
+            translation=translation,
+        )
+    )
+
+
 @app.post("/api/admin/login", response_model=LoginResponse)
 def admin_login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.execute(select(AdminUser).where(AdminUser.username == payload.username)).scalar_one_or_none()
@@ -336,6 +369,17 @@ def digital_video_status():
     return DigitalVideoStatusResponse(data=DigitalVideoStatusData(**get_digital_video_status()))
 
 
+@app.get("/api/admin/rag/status", response_model=RagStatusResponse)
+def admin_rag_status(db: Session = Depends(get_db)):
+    return RagStatusResponse(data=RagStatusData(**rag_status(db)))
+
+
+@app.post("/api/admin/rag/rebuild", response_model=RagRebuildResponse)
+def admin_rag_rebuild(payload: RagRebuildRequest | None = None, db: Session = Depends(get_db)):
+    document_name = payload.document_name.strip() if payload and payload.document_name else None
+    return RagRebuildResponse(data=RagRebuildData(**rebuild_embeddings(db, document_name=document_name)))
+
+
 @app.get("/api/admin/docs", response_model=KnowledgeDocumentsResponse)
 def list_documents(db: Session = Depends(get_db)):
     documents = db.execute(select(KnowledgeDocument).order_by(desc(KnowledgeDocument.created_at))).scalars().all()
@@ -376,6 +420,9 @@ def update_document_meta(document_id: int, payload: KnowledgeDocumentUpdateReque
         db.execute(
             update(KnowledgeChunk).where(KnowledgeChunk.document_name == old_name).values(document_name=next_name)
         )
+        db.execute(
+            update(KnowledgeEmbedding).where(KnowledgeEmbedding.document_name == old_name).values(document_name=next_name)
+        )
     db.commit()
     db.refresh(document)
     return document_detail_response(db, document)
@@ -384,6 +431,7 @@ def update_document_meta(document_id: int, payload: KnowledgeDocumentUpdateReque
 @app.delete("/api/admin/docs/{document_id}", response_model=SimpleResponse)
 def delete_document(document_id: int, db: Session = Depends(get_db)):
     document = get_document_or_404(db, document_id)
+    db.query(KnowledgeEmbedding).filter(KnowledgeEmbedding.document_name == document.name).delete()
     db.execute(
         update(KnowledgeChunk)
         .where(KnowledgeChunk.document_name == document.name)
@@ -427,6 +475,7 @@ def update_document_chunk(chunk_id: int, payload: KnowledgeChunkUpdateRequest, d
     document = db.execute(select(KnowledgeDocument).where(KnowledgeDocument.name == chunk.document_name)).scalar_one_or_none()
     if document is None:
         raise HTTPException(status_code=404, detail="知识片段缺少所属文档。")
+    db.query(KnowledgeEmbedding).filter(KnowledgeEmbedding.chunk_id == chunk.id).delete()
     chunk.title = payload.title.strip() or payload.content.strip()[:24]
     chunk.content = payload.content.strip()
     chunk.tags = payload.tags.strip()
@@ -441,6 +490,7 @@ def delete_document_chunk(chunk_id: int, db: Session = Depends(get_db)):
     document = db.execute(select(KnowledgeDocument).where(KnowledgeDocument.name == chunk.document_name)).scalar_one_or_none()
     if document is None:
         raise HTTPException(status_code=404, detail="知识片段缺少所属文档。")
+    db.query(KnowledgeEmbedding).filter(KnowledgeEmbedding.chunk_id == chunk.id).delete()
     db.delete(chunk)
     db.commit()
     db.refresh(document)

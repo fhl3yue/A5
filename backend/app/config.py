@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     model_api_key: str = ""
     model_base_url: str = ""
     model_name: str = ""
+    embedding_api_key: str = ""
+    embedding_base_url: str = "https://api.edgefn.net/v1"
+    embedding_model: str = "BAAI/bge-m3"
+    enable_rag: bool = True
+    rag_top_k: int = 5
     admin_username: str = "admin"
     admin_password: str = "admin123"
     official_materials_dir: str = "C:/Users/LWQ/Documents/Playground/cnsoftbei_a5_data"

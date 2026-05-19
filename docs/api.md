@@ -223,7 +223,39 @@
 - 地址：`GET /api/admin/digital-video/status`
 - 用途：展示启用状态、最近状态、平均耗时、回退次数和最近失败原因
 
-## 13. 外部数字人视频服务协议
+## 13. RAG 向量检索
+
+后端配置项：
+
+```dotenv
+EMBEDDING_API_KEY=
+EMBEDDING_BASE_URL=https://api.edgefn.net/v1
+EMBEDDING_MODEL=BAAI/bge-m3
+ENABLE_RAG=true
+RAG_TOP_K=5
+```
+
+说明：`EMBEDDING_API_KEY` 只写入本地 `.env`，不要写入代码、文档或 Git；Key 缺失或接口失败时，系统会自动回退到模板和关键词检索。
+
+### 13.1 查看 RAG 状态
+
+- 地址：`GET /api/admin/rag/status`
+- 用途：查看 RAG 是否启用、Embedding 是否配置、已索引片段数、向量维度、最近构建时间和失败原因
+
+### 13.2 重建向量索引
+
+- 地址：`POST /api/admin/rag/rebuild`
+- 请求体：
+
+```json
+{
+  "document_name": null
+}
+```
+
+- 说明：`document_name` 为空时重建全部有效知识片段；指定文档名时只重建该文档。
+
+## 14. 外部数字人视频服务协议
 
 后端配置项：
 

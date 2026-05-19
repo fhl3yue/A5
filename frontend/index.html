@@ -221,14 +221,6 @@
                 <span><strong>场景</strong> 游客端</span>
               </div>
 
-              <p class="micro-label">讲解模式</p>
-              <div class="guide-mode-tabs" aria-label="讲解模式">
-                <button class="guide-mode-button active" type="button" data-guide-mode="qa" data-question="">问答讲解</button>
-                <button class="guide-mode-button" type="button" data-guide-mode="route" data-question="请按半天行程讲解一条适合初次游客的路线">路线讲解</button>
-                <button class="guide-mode-button" type="button" data-guide-mode="spot" data-question="请讲解灵山大佛的文化含义和参观重点">景点讲解</button>
-                <button class="guide-mode-button" type="button" data-guide-mode="etiquette" data-question="参观灵山胜境需要注意哪些文化礼仪">礼仪提示</button>
-              </div>
-
               <p class="micro-label">当前知识库推荐问题</p>
               <div class="quick-questions" aria-label="当前知识库推荐问题">
                 <button type="button" data-question="九龙灌浴几点开始表演">九龙灌浴几点开始表演</button>
@@ -239,13 +231,23 @@
               <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
 
               <form id="textChatForm" class="ask-form">
-                <input
-                  id="questionInput"
-                  type="text"
-                  autocomplete="off"
-                  placeholder="输入你的问题，例如：九龙灌浴几点开始表演"
-                  aria-label="文本提问"
-                />
+                <div class="ask-input-shell">
+                  <label class="ask-mode-picker" for="guideModeSelect" aria-label="讲解模式选择">
+                    <select id="guideModeSelect">
+                      <option value="qa">问答讲解</option>
+                      <option value="route">路线讲解</option>
+                      <option value="spot">景点讲解</option>
+                      <option value="etiquette">礼仪提示</option>
+                    </select>
+                  </label>
+                  <input
+                    id="questionInput"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="输入你的问题，例如：九龙灌浴几点开始表演"
+                    aria-label="文本提问"
+                  />
+                </div>
                 <button class="primary-button" type="submit">发送</button>
               </form>
 
@@ -589,6 +591,25 @@
                 <input id="docUploadInput" type="file" accept=".txt,.md,.docx,.xlsx" />
                 <button class="primary-button" type="submit">上传导入</button>
               </form>
+            </section>
+
+            <section class="admin-panel rag-panel">
+              <div class="panel-heading compact">
+                <div>
+                  <p class="eyebrow">RAG Retrieval</p>
+                  <h3>向量检索索引</h3>
+                </div>
+                <button id="rebuildRagButton" class="ghost-button" type="button">重建向量索引</button>
+              </div>
+              <div class="video-status-grid rag-status-grid">
+                <span>启用状态：<strong id="ragEnabled">待检测</strong></span>
+                <span>配置状态：<strong id="ragConfigured">待检测</strong></span>
+                <span>Embedding 模型：<strong id="ragModelName">-</strong></span>
+                <span>向量维度：<strong id="ragDimension">-</strong></span>
+                <span>索引片段：<strong id="ragIndexedChunks">0 / 0</strong></span>
+                <span>最近构建：<strong id="ragLastUpdated">-</strong></span>
+                <span class="wide-field">最近提示：<strong id="ragLastError">无</strong></span>
+              </div>
             </section>
 
             <section class="admin-panel knowledge-panel">

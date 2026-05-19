@@ -8,6 +8,9 @@ from app.models import QALog
 from app.utils import looks_garbled, normalize_text
 
 
+KNOWLEDGE_GAP_MARKER = "知识库待补充"
+
+
 def is_dashboard_hot_question(text: str) -> bool:
     normalized = normalize_text(text)
     if looks_garbled(normalized):
@@ -78,7 +81,14 @@ def build_visitor_report(db: Session) -> dict:
         f"当前主要情绪为 {emotion_counter.most_common(1)[0][0]}，平均响应耗时 {avg_response_seconds:.2f} 秒。"
     )
 
-    suggestions = build_service_suggestions(focus_counter, emotion_counter, satisfaction_rate, avg_response_seconds, ratings)
+    suggestions = build_service_suggestions(
+        focus_counter,
+        emotion_counter,
+        satisfaction_rate,
+        avg_response_seconds,
+        ratings,
+        all_logs,
+    )
     return {
         "summary": summary,
         "focus_points": focus_points,
@@ -172,14 +182,26 @@ def build_service_suggestions(
     satisfaction_rate: float,
     avg_response_seconds: float,
     ratings: list[int],
+    logs: list[QALog],
 ) -> list[str]:
     suggestions: list[str] = []
     focus_text = " ".join(focus_counter.keys())
+    gap_logs = [item for item in logs if KNOWLEDGE_GAP_MARKER in (item.source_titles or "")]
+    gap_text = " ".join(normalize_text(item.question) for item in gap_logs)
 
     if "几点" in focus_text or "时间" in focus_text or "演出" in focus_text:
         suggestions.append("游客高频关注演出时间，建议在游客端首页固定展示九龙灌浴、吉祥颂等核心演出时刻。")
     if "路线" in focus_text or "怎么" in focus_text or "推荐" in focus_text:
         suggestions.append("路线规划需求较明显，建议按半天、全天、亲子、文化深度等场景维护更多路线模板。")
+    if gap_logs:
+        if "停车" in gap_text or "停车场" in gap_text:
+            suggestions.append("近期有游客询问停车信息但知识库未覆盖，建议在后台补充停车场位置、自驾入口和高峰停车提示。")
+        elif "门票" in gap_text or "票价" in gap_text or "购票" in gap_text:
+            suggestions.append("近期有游客询问票务信息但知识库未覆盖，建议在后台补充购票方式、预约规则和入园说明。")
+        elif "交通" in gap_text or "怎么去" in gap_text or "公交" in gap_text:
+            suggestions.append("近期有游客询问交通到达信息但知识库未覆盖，建议在后台补充自驾、公交和接驳路线。")
+        else:
+            suggestions.append("近期存在知识库未覆盖问题，建议后台根据游客提问补充停车、票务、交通和配套服务信息。")
     if ratings and satisfaction_rate < 0.75:
         suggestions.append("满意度低于 75%，建议人工复核低评分问答，补充缺失知识点或优化回答表达。")
     if emotion_counter.get("negative", 0) > emotion_counter.get("positive", 0):

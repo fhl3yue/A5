@@ -49,6 +49,24 @@ class FeedbackRequest(BaseModel):
     satisfaction: int = Field(ge=1, le=5)
 
 
+class TranslateRequest(BaseModel):
+    log_id: int | None = None
+    text: str | None = Field(default=None, max_length=4000)
+    target_language: str = Field(default="en", pattern="^(en)$")
+
+
+class TranslateData(BaseModel):
+    log_id: int | None = None
+    target_language: str
+    translation: str
+
+
+class TranslateResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: TranslateData
+
+
 class SimpleResponse(BaseModel):
     code: int = 0
     message: str = "success"
@@ -146,6 +164,41 @@ class DigitalVideoStatusResponse(BaseModel):
     code: int = 0
     message: str = "success"
     data: DigitalVideoStatusData
+
+
+class RagRebuildRequest(BaseModel):
+    document_name: str | None = None
+
+
+class RagStatusData(BaseModel):
+    enabled: bool
+    configured: bool
+    model_name: str
+    indexed_chunks: int
+    total_chunks: int
+    dimension: int | None = None
+    last_updated: datetime | None = None
+    last_error: str = ""
+
+
+class RagStatusResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: RagStatusData
+
+
+class RagRebuildData(BaseModel):
+    indexed: int
+    skipped: int
+    failed: int
+    total: int
+    message: str
+
+
+class RagRebuildResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: RagRebuildData
 
 
 class LoginRequest(BaseModel):

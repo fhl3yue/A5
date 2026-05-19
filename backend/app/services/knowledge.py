@@ -6,7 +6,7 @@ from openpyxl import load_workbook
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.models import KnowledgeChunk, KnowledgeDocument, RoutePreset, ScenicSpot
+from app.models import KnowledgeChunk, KnowledgeDocument, KnowledgeEmbedding, RoutePreset, ScenicSpot
 from app.utils import normalize_text
 
 
@@ -23,6 +23,7 @@ def upsert_sample_data(db: Session, sample_dir: Path) -> None:
 
     db.execute(delete(ScenicSpot))
     db.execute(delete(RoutePreset))
+    db.execute(delete(KnowledgeEmbedding).where(KnowledgeEmbedding.document_name == "sample_scenic_spots"))
     db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.document_name == "sample_scenic_spots"))
     db.execute(delete(KnowledgeDocument).where(KnowledgeDocument.name == "sample_scenic_spots"))
 
@@ -87,6 +88,7 @@ def import_plain_text_document(db: Session, file_path: Path, source: str = "uplo
     text = file_path.read_text(encoding="utf-8", errors="ignore")
     chunks = [normalize_text(item) for item in text.splitlines() if normalize_text(item)]
     document_name = file_path.name
+    db.execute(delete(KnowledgeEmbedding).where(KnowledgeEmbedding.document_name == document_name))
     db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.document_name == document_name))
     db.execute(delete(KnowledgeDocument).where(KnowledgeDocument.name == document_name))
 
@@ -109,6 +111,7 @@ def import_docx_document(db: Session, file_path: Path, source: str = "official-d
     doc = Document(file_path)
     chunks = [normalize_text(p.text) for p in doc.paragraphs if normalize_text(p.text)]
     document_name = file_path.name
+    db.execute(delete(KnowledgeEmbedding).where(KnowledgeEmbedding.document_name == document_name))
     db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.document_name == document_name))
     db.execute(delete(KnowledgeDocument).where(KnowledgeDocument.name == document_name))
     db.add(KnowledgeDocument(name=document_name, source=source, status="active", content_type="docx"))
@@ -132,6 +135,7 @@ def import_xlsx_rows(db: Session, file_path: Path, source: str = "official-xlsx"
     rows = ws.iter_rows(values_only=True)
     headers = [str(item).strip() if item is not None else "" for item in next(rows)]
     imported = 0
+    db.execute(delete(KnowledgeEmbedding).where(KnowledgeEmbedding.document_name == file_path.name))
     db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.document_name == file_path.name))
     db.execute(delete(KnowledgeDocument).where(KnowledgeDocument.name == file_path.name))
     db.add(KnowledgeDocument(name=file_path.name, source=source, status="active", content_type="xlsx"))

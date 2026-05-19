@@ -38,6 +38,21 @@ class KnowledgeChunk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class KnowledgeEmbedding(Base):
+    __tablename__ = "knowledge_embeddings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    chunk_id: Mapped[int] = mapped_column(Integer, unique=True, index=True, nullable=False)
+    document_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    vector_json: Mapped[str] = mapped_column(Text, nullable=False)
+    dimension: Mapped[int] = mapped_column(Integer, default=0)
+    model_name: Mapped[str] = mapped_column(String(255), default="")
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class ScenicSpot(Base):
     __tablename__ = "scenic_spots"
 

@@ -2,6 +2,7 @@ const state = {
   currentLogId: null,
   audio: null,
   video: null,
+  answerTranslations: {},
   recorder: null,
   recordingStream: null,
   recordingChunks: [],
@@ -35,6 +36,28 @@ function isAbsoluteUrl(value) {
 }
 
 const API_BASE_URL = normalizeBaseUrl(runtimeParams.get("apiBase") || window.SCENIC_AI_API_BASE_URL || getStoredApiBaseUrl());
+const GUIDE_MODE_META = {
+  qa: {
+    label: "问答讲解",
+    placeholder: "输入你的问题，例如：九龙灌浴几点开始表演",
+    question: "",
+  },
+  route: {
+    label: "路线讲解",
+    placeholder: "输入路线需求，例如：半天、亲子、避开人流",
+    question: "请按半天行程讲解一条适合初次游客的路线",
+  },
+  spot: {
+    label: "景点讲解",
+    placeholder: "输入景点名称，例如：灵山大佛、梵宫、九龙灌浴",
+    question: "请讲解灵山大佛的文化含义和参观重点",
+  },
+  etiquette: {
+    label: "礼仪提示",
+    placeholder: "输入礼仪问题，例如：殿堂拍照需要注意什么",
+    question: "参观灵山胜境需要注意哪些文化礼仪",
+  },
+};
 
 if (runtimeClient) {
   document.body.classList.add(`client-${runtimeClient}`);
@@ -298,6 +321,7 @@ const elements = {
   guideSubtitle: $("#guideSubtitle"),
   chatMessages: $("#chatMessages"),
   textChatForm: $("#textChatForm"),
+  guideModeSelect: $("#guideModeSelect"),
   questionInput: $("#questionInput"),
   recordButton: $("#recordButton"),
   voiceHint: $("#voiceHint"),
@@ -372,6 +396,14 @@ const elements = {
   videoProviderAverage: $("#videoProviderAverage"),
   videoProviderFallbacks: $("#videoProviderFallbacks"),
   videoProviderFailure: $("#videoProviderFailure"),
+  rebuildRagButton: $("#rebuildRagButton"),
+  ragEnabled: $("#ragEnabled"),
+  ragConfigured: $("#ragConfigured"),
+  ragModelName: $("#ragModelName"),
+  ragDimension: $("#ragDimension"),
+  ragIndexedChunks: $("#ragIndexedChunks"),
+  ragLastUpdated: $("#ragLastUpdated"),
+  ragLastError: $("#ragLastError"),
   visitorVideoStatus: $("#visitorVideoStatus"),
   visitorFallbackMessage: $("#visitorFallbackMessage"),
   visitorServiceBoundary: $("#visitorServiceBoundary"),
@@ -464,6 +496,20 @@ function setPetMode(mode) {
   if (mode) {
     elements.avatarFrame.classList.add(mode);
   }
+}
+
+function applyGuideMode(mode, { autofill = false } = {}) {
+  const nextMode = GUIDE_MODE_META[mode] ? mode : "qa";
+  const meta = GUIDE_MODE_META[nextMode];
+  state.guideMode = nextMode;
+  if (elements.guideModeSelect) {
+    elements.guideModeSelect.value = nextMode;
+  }
+  elements.questionInput.placeholder = meta.placeholder;
+  if (autofill && meta.question) {
+    elements.questionInput.value = meta.question;
+  }
+  setPetSpeech(meta.label);
 }
 
 function voiceLabel(voiceName) {
@@ -658,6 +704,20 @@ async function loadDigitalVideoStatus({ silent = true } = {}) {
   }
 }
 
+async function loadRagStatus({ silent = true } = {}) {
+  if (!elements.ragEnabled) {
+    return;
+  }
+  try {
+    const status = await apiFetch("/api/admin/rag/status");
+    renderRagStatus(status);
+  } catch (error) {
+    if (!silent) {
+      showToast(error.message, "error");
+    }
+  }
+}
+
 function renderDigitalVideoStatus(status) {
   const enabledText = status.enabled ? (status.configured ? "已启用" : "未配置地址") : "未启用";
   elements.videoProviderEnabled.textContent = enabledText;
@@ -668,6 +728,16 @@ function renderDigitalVideoStatus(status) {
   if (elements.visitorVideoStatus) {
     elements.visitorVideoStatus.textContent = status.enabled ? "外部视频优先" : "当前回退音频";
   }
+}
+
+function renderRagStatus(status) {
+  elements.ragEnabled.textContent = status.enabled ? "已启用" : "已关闭";
+  elements.ragConfigured.textContent = status.configured ? "已配置" : "缺少 Key";
+  elements.ragModelName.textContent = status.model_name || "-";
+  elements.ragDimension.textContent = status.dimension || "-";
+  elements.ragIndexedChunks.textContent = `${status.indexed_chunks ?? 0} / ${status.total_chunks ?? 0}`;
+  elements.ragLastUpdated.textContent = formatTime(status.last_updated);
+  elements.ragLastError.textContent = status.last_error || "无";
 }
 
 function setApiStatus(text, type) {
@@ -705,13 +775,45 @@ function renderRouteCard(data) {
   `;
 }
 
-function renderReferenceTags(references = []) {
-  if (!references.length) {
+function normalizeReferenceLabel(value) {
+  const text = String(value || "").trim();
+  if (!text || text.startsWith("知识库待补充")) {
     return "";
   }
+  if (text.startsWith("路线规划：")) {
+    return "路线参考";
+  }
+  if (text.length > 16) {
+    return `${text.slice(0, 14)}…`;
+  }
+  return text;
+}
+
+function dedupeReferenceLabels(references = []) {
+  const seen = new Set();
+  const result = [];
+  for (const item of references) {
+    const label = normalizeReferenceLabel(item);
+    if (!label || seen.has(label)) {
+      continue;
+    }
+    seen.add(label);
+    result.push({ label, fullText: String(item || "").trim() });
+  }
+  return result;
+}
+
+function renderReferenceTags(references = []) {
+  const normalized = dedupeReferenceLabels(references);
+  if (!normalized.length) {
+    return "";
+  }
+  const visible = normalized.slice(0, 3);
+  const hidden = normalized.slice(3);
   return `
-    <div class="message-meta">
-      ${references.map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
+    <div class="message-meta reference-meta" aria-label="知识参考关键词">
+      ${visible.map((item) => `<span class="tag compact-tag" title="${escapeHtml(item.fullText)}">${escapeHtml(item.label)}</span>`).join("")}
+      ${hidden.length ? `<span class="tag compact-tag tag-more" title="${escapeHtml(hidden.map((item) => item.fullText).join(" / "))}">+${hidden.length}</span>` : ""}
     </div>
   `;
 }
@@ -720,13 +822,38 @@ function renderFeedbackActions(logId) {
   if (!logId) {
     return "";
   }
+  const stars = [1, 2, 3, 4, 5]
+    .map(
+      (rating) => `
+        <button
+          class="rating-button rating-star"
+          type="button"
+          data-rating="${rating}"
+          data-log-id="${logId}"
+          aria-label="${rating} 星满意度"
+          title="${rating} 星"
+        >★</button>
+      `
+    )
+    .join("");
   return `
-    <div class="message-actions" aria-label="满意度反馈">
-      <button class="rating-button" type="button" data-rating="5" data-log-id="${logId}">5</button>
-      <button class="rating-button" type="button" data-rating="4" data-log-id="${logId}">4</button>
-      <button class="rating-button" type="button" data-rating="3" data-log-id="${logId}">3</button>
-      <button class="rating-button" type="button" data-rating="2" data-log-id="${logId}">2</button>
-      <button class="rating-button" type="button" data-rating="1" data-log-id="${logId}">1</button>
+    <div class="message-actions feedback-actions" aria-label="满意度反馈">
+      ${stars}
+    </div>
+  `;
+}
+
+function renderTranslationBlock(text, targetLanguage = "en") {
+  if (!text) {
+    return "";
+  }
+  const label = targetLanguage === "en" ? "English Answer" : targetLanguage;
+  return `
+    <div class="translation-card" data-translation-language="${escapeHtml(targetLanguage)}">
+      <div class="translation-head">
+        <span class="tag">${escapeHtml(label)}</span>
+      </div>
+      <p>${escapeHtml(text)}</p>
     </div>
   `;
 }
@@ -743,6 +870,17 @@ function renderAnswer(data, options = {}) {
     : "";
   const audioButton = data.audio_url
     ? `<button class="small-action" type="button" data-audio-url="${escapeHtml(data.audio_url)}">播放回答</button>`
+    : "";
+  const translateButton = data.audio_url
+    ? `
+      <button
+        class="small-action translate-action"
+        type="button"
+        data-translate-log-id="${data.log_id}"
+        data-translate-language="en"
+        data-translate-source="${escapeHtml(data.answer)}"
+      >English</button>
+    `
     : "";
   const videoReady = data.video_url && data.video_status === "ready";
   const videoButton = videoReady
@@ -767,7 +905,9 @@ function renderAnswer(data, options = {}) {
       <div class="message-actions">
         ${videoButton}
         ${audioButton}
+        ${translateButton}
       </div>
+      <div class="translation-slot" data-translation-slot="${data.log_id}"></div>
       ${renderFeedbackActions(data.log_id)}
     `
   );
@@ -1079,13 +1219,68 @@ async function submitFeedback(logId, satisfaction, button) {
       method: "POST",
       body: JSON.stringify({ log_id: Number(logId), satisfaction: Number(satisfaction) }),
     });
-    button.closest(".message-actions").querySelectorAll("button").forEach((item) => {
+    button.closest(".feedback-actions").querySelectorAll("button").forEach((item) => {
+      const isSelected = Number(item.dataset.rating) <= Number(satisfaction);
+      item.classList.toggle("selected", isSelected);
+      item.classList.toggle("muted", !isSelected);
       item.disabled = true;
     });
-    showToast(`已提交 ${satisfaction} 分反馈。`);
+    showToast(`已提交 ${satisfaction} 星反馈。`);
     loadAdminData({ silent: true });
   } catch (error) {
     showToast(error.message, "error");
+  }
+}
+
+async function toggleTranslation(button) {
+  const logId = Number(button.dataset.translateLogId || 0);
+  const targetLanguage = button.dataset.translateLanguage || "en";
+  const sourceText = button.dataset.translateSource || "";
+  const messageNode = button.closest(".message");
+  const slot = messageNode?.querySelector(`[data-translation-slot="${logId}"]`);
+  if (!logId || !slot) {
+    return;
+  }
+
+  const cacheKey = `${logId}:${targetLanguage}`;
+  const expanded = button.dataset.expanded === "true";
+  if (expanded) {
+    slot.innerHTML = "";
+    button.dataset.expanded = "false";
+    button.textContent = targetLanguage === "en" ? "English" : targetLanguage;
+    return;
+  }
+
+  if (state.answerTranslations[cacheKey]) {
+    slot.innerHTML = renderTranslationBlock(state.answerTranslations[cacheKey], targetLanguage);
+    button.dataset.expanded = "true";
+    button.textContent = targetLanguage === "en" ? "收起英文" : "收起";
+    elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    return;
+  }
+
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "翻译中...";
+  try {
+    const data = await apiFetch("/api/chat/translate", {
+      method: "POST",
+      body: JSON.stringify({
+        log_id: logId,
+        text: sourceText,
+        target_language: targetLanguage,
+      }),
+    });
+    state.answerTranslations[cacheKey] = data.translation;
+    slot.innerHTML = renderTranslationBlock(data.translation, targetLanguage);
+    button.dataset.expanded = "true";
+    button.textContent = targetLanguage === "en" ? "收起英文" : "收起";
+    elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+  } catch (error) {
+    button.textContent = originalLabel;
+    showToast(error.message, "error");
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -1115,18 +1310,20 @@ async function loadAdminData({ silent = false } = {}) {
   }
 
   try {
-    const [dashboard, report, logs, docs, videoStatus] = await Promise.all([
+    const [dashboard, report, logs, docs, videoStatus, ragStatus] = await Promise.all([
       apiFetch("/api/admin/dashboard"),
       apiFetch("/api/admin/visitor-report"),
       apiFetch("/api/admin/logs?limit=50"),
       apiFetch("/api/admin/docs"),
       apiFetch("/api/admin/digital-video/status"),
+      apiFetch("/api/admin/rag/status"),
     ]);
     renderDashboard(dashboard);
     renderVisitorReport(report);
     renderLogs(logs);
     renderKnowledgeDocs(docs);
     renderDigitalVideoStatus(videoStatus);
+    renderRagStatus(ragStatus);
     if (!silent) {
       showToast("后台数据已刷新。");
     }
@@ -1398,6 +1595,29 @@ async function loadKnowledgeDocs({ silent = false } = {}) {
     if (!silent) {
       showToast(error.message, "error");
     }
+  }
+}
+
+async function rebuildRagIndex() {
+  if (!window.confirm("确认重建全部知识片段的向量索引？未配置 Embedding Key 时会自动降级，不影响问答演示。")) {
+    return;
+  }
+
+  const originalText = elements.rebuildRagButton.textContent;
+  elements.rebuildRagButton.disabled = true;
+  elements.rebuildRagButton.textContent = "重建中...";
+  try {
+    const result = await apiFetch("/api/admin/rag/rebuild", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    await loadRagStatus({ silent: true });
+    showToast(result.message || "向量索引重建完成。");
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    elements.rebuildRagButton.disabled = false;
+    elements.rebuildRagButton.textContent = originalText;
   }
 }
 
@@ -1681,26 +1901,9 @@ function bindEvents() {
     });
   });
 
-  $$(".guide-mode-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      $$(".guide-mode-button").forEach((item) => item.classList.remove("active"));
-      button.classList.add("active");
-      const question = button.dataset.question || "";
-      const mode = button.dataset.guideMode || "qa";
-      state.guideMode = mode;
-      const placeholders = {
-        qa: "输入你的问题，例如：九龙灌浴几点开始表演",
-        route: "输入路线需求，例如：半天、亲子、避开人流",
-        spot: "输入景点名称，例如：灵山大佛、梵宫、九龙灌浴",
-        etiquette: "输入礼仪问题，例如：殿堂拍照需要注意什么",
-      };
-      elements.questionInput.placeholder = placeholders[mode] || placeholders.qa;
-      if (question) {
-        elements.questionInput.value = question;
-      }
-      elements.questionInput.focus();
-      setPetSpeech(button.textContent.trim());
-    });
+  elements.guideModeSelect.addEventListener("change", () => {
+    applyGuideMode(elements.guideModeSelect.value, { autofill: true });
+    elements.questionInput.focus();
   });
 
   elements.textChatForm.addEventListener("submit", (event) => {
@@ -1751,6 +1954,12 @@ function bindEvents() {
     const ratingButton = event.target.closest("[data-rating]");
     if (ratingButton) {
       submitFeedback(ratingButton.dataset.logId, ratingButton.dataset.rating, ratingButton);
+      return;
+    }
+
+    const translateButton = event.target.closest("[data-translate-log-id]");
+    if (translateButton) {
+      toggleTranslation(translateButton);
     }
   });
 
@@ -1763,6 +1972,7 @@ function bindEvents() {
   elements.reloadLogsButton.addEventListener("click", () => loadAdminData());
   elements.reloadKnowledgeButton.addEventListener("click", () => loadKnowledgeDocs());
   elements.refreshVideoStatusButton.addEventListener("click", () => loadDigitalVideoStatus({ silent: false }));
+  elements.rebuildRagButton.addEventListener("click", rebuildRagIndex);
 
   elements.uploadForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -1831,6 +2041,7 @@ async function boot() {
   configureRuntimeLinks();
   bindEvents();
   bindLicensedAvatarAsset();
+  applyGuideMode(state.guideMode);
   checkApiHealth();
   await loadDigitalHumanConfig();
   await loadDigitalVideoStatus();
