@@ -111,4 +111,7 @@ class QALog(Base):
     emotion: Mapped[str] = mapped_column(String(50), default="neutral")
     satisfaction: Mapped[int | None] = mapped_column(Integer, nullable=True)
     response_seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    audio_url: Mapped[str] = mapped_column(String(500), default="")
+    audio_status: Mapped[str] = mapped_column(String(20), default="pending")
+    audio_ready_seconds: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

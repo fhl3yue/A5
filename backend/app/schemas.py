@@ -14,6 +14,11 @@ class ChatData(BaseModel):
     interpreted_question: str | None = None
     answer: str
     audio_url: str | None = None
+    audio_status: str = "pending"
+    english_available: bool = False
+    answer_source: str = "local"
+    model_name: str = ""
+    lipsync_available: bool = False
     video_url: str | None = None
     video_status: str = "disabled"
     emotion: str = "neutral"
@@ -30,12 +35,15 @@ class ChatResponse(BaseModel):
 class RouteRequest(BaseModel):
     interest: str
     duration: str = "半天"
+    user_id: str = "guest"
 
 
 class RouteData(BaseModel):
     route_name: str
     route_spots: list[str]
     reason: str
+    matched_interest: str = ""
+    personalization_basis: list[str] = []
 
 
 class RouteResponse(BaseModel):
@@ -59,6 +67,20 @@ class TranslateData(BaseModel):
     log_id: int | None = None
     target_language: str
     translation: str
+    audio_url: str | None = None
+
+
+class AudioStatusData(BaseModel):
+    log_id: int
+    audio_status: str
+    audio_url: str | None = None
+    lipsync_available: bool = False
+
+
+class AudioStatusResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: AudioStatusData
 
 
 class TranslateResponse(BaseModel):
@@ -201,6 +223,58 @@ class RagRebuildResponse(BaseModel):
     data: RagRebuildData
 
 
+class AIStatusData(BaseModel):
+    main_model_configured: bool
+    main_model_name: str
+    rag_enabled: bool
+    rag_configured: bool
+    tts_enabled: bool
+    english_available: bool
+    english_tts_enabled: bool
+    lipsync_available: bool
+    digital_video_enabled: bool
+    digital_video_configured: bool
+    status_notes: list[str] = []
+
+
+class AIStatusResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: AIStatusData
+
+
+class EvaluationCaseResult(BaseModel):
+    case_id: str
+    question: str
+    passed: bool
+    latency_seconds: float
+    answer_source: str = ""
+    reference: list[str] = []
+    expected_keywords: list[str] = []
+    hit_keywords: list[str] = []
+    answer_preview: str = ""
+
+
+class EvaluationData(BaseModel):
+    total_cases: int = 0
+    passed_cases: int = 0
+    accuracy_rate: float = 0.0
+    average_latency_seconds: float = 0.0
+    latency_p95_seconds: float = 0.0
+    passed: bool = False
+    threshold_accuracy: float = 0.9
+    threshold_latency_seconds: float = 5.0
+    model_name: str = ""
+    generated_at: datetime | None = None
+    case_results: list[EvaluationCaseResult] = []
+
+
+class EvaluationResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: EvaluationData
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -226,6 +300,8 @@ class LogItem(BaseModel):
     emotion: str
     satisfaction: int | None
     response_seconds: float
+    audio_status: str = "pending"
+    audio_ready_seconds: float = 0.0
     source_titles: list[str]
     created_at: datetime
 

@@ -30,6 +30,10 @@
     "interpreted_question": "九龙灌浴几点开始表演？",
     "answer": "根据当前景区知识库，...",
     "audio_url": "/generated/audio/answer_xxx.mp3",
+    "english_available": false,
+    "answer_source": "rag_model",
+    "model_name": "GLM-5.1",
+    "lipsync_available": true,
     "video_url": "https://gpu.example.com/generated/video/answer_xxx.mp4",
     "video_status": "ready",
     "emotion": "neutral",
@@ -52,9 +56,44 @@
 - 若前端自己先完成转写，也可以继续传 `transcript`
 - 返回中的 `transcript` 是原始识别文本，`interpreted_question` 是后端提炼后的最终检索问题
 - 文本问答与语音问答在成功时都会尽量返回 `audio_url`
+- `english_available=true` 表示游客端当前回答可点击 `English`，并调用独立英文回答服务
 - 开启数字人视频服务后会返回 `video_url` 和 `video_status`；`ready` 播放视频，`timeout/error/disabled` 回退音频
 
-## 4. 路线推荐
+## 4. 英文回答
+
+- 地址：`POST /api/chat/translate`
+- 请求体：
+
+```json
+{
+  "log_id": 1,
+  "text": "如果你计划在灵山胜境游览半天，建议走“灵山大照壁 → 祥符禅寺 → 灵山大佛 → 灵山梵宫”。",
+  "target_language": "en"
+}
+```
+
+- 返回体：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "log_id": 1,
+    "target_language": "en",
+    "translation": "If you only have half a day at Lingshan Scenic Area, a recommended route is ...",
+    "audio_url": "/generated/audio/answer_xxx.mp3"
+  }
+}
+```
+
+说明：
+
+- 英文回答服务使用独立的 OpenAI 兼容配置，不复用中文主问答模型配置
+- 若只配置英文模型，未配置英文 TTS，则 `audio_url` 返回 `null`
+- 若未配置英文服务，接口返回 `503`
+
+## 5. 路线推荐
 
 - 地址：`POST /api/recommend/route`
 - 请求体：
@@ -62,11 +101,28 @@
 ```json
 {
   "interest": "历史文化",
-  "duration": "半天"
+  "duration": "半天",
+  "user_id": "web-visitor"
 }
 ```
 
-## 5. 满意度反馈
+- 返回体：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "route_name": "历史文化半日路线",
+    "route_spots": ["灵山大照壁", "祥符禅寺", "灵山大佛"],
+    "reason": "结合当前输入与历史偏好生成路线。",
+    "matched_interest": "历史文化",
+    "personalization_basis": ["当前输入：历史文化", "游览时长：半天"]
+  }
+}
+```
+
+## 6. 满意度反馈
 
 - 地址：`POST /api/feedback`
 - 请求体：
@@ -78,20 +134,20 @@
 }
 ```
 
-## 6. 管理员登录
+## 7. 管理员登录
 
 - 地址：`POST /api/admin/login`
 
-## 7. 问答日志
+## 8. 问答日志
 
 - 地址：`GET /api/admin/logs?limit=50`
 
-## 8. 数据看板
+## 9. 数据看板
 
 - 地址：`GET /api/admin/dashboard`
 - 用途：展示当日服务数据、热门问题、情绪分布、本周服务趋势和满意度趋势
 
-## 9. 游客感受度报告
+## 10. 游客感受度报告
 
 - 地址：`GET /api/admin/visitor-report`
 - 用途：根据交互日志生成游客关注点、七日情绪趋势和服务建议
@@ -124,12 +180,12 @@
 }
 ```
 
-## 10. 文档上传
+## 11. 文档上传
 
 - 地址：`POST /api/admin/docs/upload`
 - 支持格式：`.txt`、`.md`、`.docx`、`.xlsx`
 
-## 11. 知识库管理
+## 12. 知识库管理
 
 ### 11.1 文档列表
 
@@ -185,7 +241,7 @@
 
 - 地址：`DELETE /api/admin/docs/chunks/{chunk_id}`
 
-## 12. 数字人配置
+## 13. 数字人配置
 
 ### 12.1 获取当前数字人配置
 
@@ -223,7 +279,7 @@
 - 地址：`GET /api/admin/digital-video/status`
 - 用途：展示启用状态、最近状态、平均耗时、回退次数和最近失败原因
 
-## 13. RAG 向量检索
+## 14. RAG 向量检索
 
 后端配置项：
 
@@ -255,7 +311,62 @@ RAG_TOP_K=5
 
 - 说明：`document_name` 为空时重建全部有效知识片段；指定文档名时只重建该文档。
 
-## 14. 外部数字人视频服务协议
+## 15. 核心 AI 状态与验收评测
+
+### 15.1 核心 AI 能力状态
+
+- 地址：`GET /api/admin/ai/status`
+- 用途：查看中文主模型、RAG、中文 TTS、英文回答、口型同步和外部视频服务是否可用
+
+### 15.2 读取最近一次验收评测
+
+- 地址：`GET /api/admin/evaluation/latest`
+
+### 15.3 运行验收评测
+
+- 地址：`POST /api/admin/evaluation/run`
+- 用途：自动运行标准问题集，返回准确率、平均耗时、P95 耗时和逐题命中情况
+- 验收阈值：准确率不低于 90%，P95 响应耗时不超过 5.00 秒
+
+返回体示例：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "total_cases": 6,
+    "passed_cases": 6,
+    "accuracy_rate": 1.0,
+    "average_latency_seconds": 1.42,
+    "latency_p95_seconds": 2.31,
+    "passed": true,
+    "model_name": "GLM-5.1",
+    "case_results": []
+  }
+}
+```
+
+## 16. 英文回答服务配置
+
+后端配置项：
+
+```dotenv
+ENABLE_ENGLISH_TRANSLATION=true
+ENGLISH_MODEL_API_KEY=
+ENGLISH_MODEL_BASE_URL=https://api.openai-like.example/v1
+ENGLISH_MODEL_NAME=gpt-4.1-mini
+ENABLE_ENGLISH_TTS=true
+ENGLISH_TTS_VOICE=en-US-JennyNeural
+```
+
+说明：
+
+- `ENGLISH_MODEL_*` 只用于英文回答与英文语音，不影响中文主问答链路
+- 真实英文模型密钥只写入本地 `.env`，不要写入代码、文档或 Git
+- 修改 `.env` 后需要重启后端服务
+
+## 17. 外部数字人视频服务协议
 
 后端配置项：
 

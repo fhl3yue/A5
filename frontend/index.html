@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>灵山胜境 AI 数字人导览</title>
-    <link rel="stylesheet" href="./styles.css?v=20260518-avatar-motion" />
+    <link rel="stylesheet" href="./styles.css?v=20260522-ai-complete" />
   </head>
   <body>
     <div class="app-shell">
@@ -570,6 +570,7 @@
                       <th>情绪</th>
                       <th>评分</th>
                       <th>耗时</th>
+                      <th>语音</th>
                       <th>时间</th>
                     </tr>
                   </thead>
@@ -610,6 +611,40 @@
                 <span>最近构建：<strong id="ragLastUpdated">-</strong></span>
                 <span class="wide-field">最近提示：<strong id="ragLastError">无</strong></span>
               </div>
+            </section>
+
+            <section class="admin-panel ai-status-panel">
+              <div class="panel-heading compact">
+                <div>
+                  <p class="eyebrow">AI Capability</p>
+                  <h3>核心 AI 能力状态</h3>
+                </div>
+                <span class="status-pill ok">验收项</span>
+              </div>
+              <div class="video-status-grid ai-status-grid">
+                <span>中文主模型：<strong id="aiMainModelStatus">待检测</strong></span>
+                <span>模型名称：<strong id="aiMainModelName">-</strong></span>
+                <span>RAG 检索：<strong id="aiRagStatus">待检测</strong></span>
+                <span>中文语音：<strong id="aiTtsStatus">待检测</strong></span>
+                <span>英文回答：<strong id="aiEnglishStatus">待检测</strong></span>
+                <span>口型同步：<strong id="aiLipsyncStatus">待检测</strong></span>
+              </div>
+            </section>
+
+            <section class="admin-panel evaluation-panel">
+              <div class="panel-heading compact">
+                <div>
+                  <p class="eyebrow">Acceptance Check</p>
+                  <h3>验收评测</h3>
+                </div>
+                <button id="runEvaluationButton" class="ghost-button" type="button">运行验收评测</button>
+              </div>
+              <div class="video-status-grid evaluation-status-grid">
+                <span>评测结论：<strong id="evaluationPassed">尚未评测</strong></span>
+                <span>准确率：<strong id="evaluationAccuracy">-</strong></span>
+                <span>响应耗时：<strong id="evaluationLatency">-</strong></span>
+              </div>
+              <div id="evaluationCases" class="evaluation-cases empty-state">点击“运行验收评测”后生成标准题结果。</div>
             </section>
 
             <section class="admin-panel knowledge-panel">
@@ -658,6 +693,6 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=20260518-avatar-motion" defer></script>
+    <script src="./app.js?v=20260522-ai-complete" defer></script>
   </body>
 </html>

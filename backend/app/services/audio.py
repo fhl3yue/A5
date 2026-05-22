@@ -8,12 +8,14 @@ from app.config import settings
 
 
 async def _synthesize_to_file(text: str, output_path: Path, voice_name: str | None = None) -> None:
-    communicate = edge_tts.Communicate(text=text[:1200], voice=voice_name or settings.tts_voice)
+    communicate = edge_tts.Communicate(text=text[: settings.tts_max_chars], voice=voice_name or settings.tts_voice)
     await communicate.save(str(output_path))
 
 
-def generate_tts_audio(text: str, voice_name: str | None = None) -> str | None:
-    if not settings.enable_tts:
+def generate_tts_audio(text: str, voice_name: str | None = None, enabled: bool | None = None) -> str | None:
+    if enabled is None:
+        enabled = settings.enable_tts
+    if not enabled:
         return None
 
     output_name = f"answer_{uuid4().hex}.mp3"

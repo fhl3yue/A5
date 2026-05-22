@@ -13,6 +13,10 @@ from app.config import BASE_DIR, ensure_runtime_dirs, settings
 from app.database import Base, engine, get_db
 from app.models import AdminUser, KnowledgeChunk, KnowledgeDocument, KnowledgeEmbedding, QALog
 from app.schemas import (
+    AIStatusData,
+    AIStatusResponse,
+    AudioStatusData,
+    AudioStatusResponse,
     ChatData,
     ChatRequest,
     ChatResponse,
@@ -21,6 +25,8 @@ from app.schemas import (
     DigitalHumanConfigResponse,
     DigitalVideoStatusData,
     DigitalVideoStatusResponse,
+    EvaluationData,
+    EvaluationResponse,
     FeedbackRequest,
     KnowledgeChunkCreateRequest,
     KnowledgeChunkItem,
@@ -50,9 +56,12 @@ from app.schemas import (
     VisitorReportResponse,
 )
 from app.services.analytics import build_dashboard, build_visitor_report
-from app.services.chat import answer_question, translate_answer_text
+from app.services.ai_status import build_ai_status
+from app.services.audio_tasks import get_audio_status
+from app.services.chat import answer_question, build_translation_result
 from app.services.digital_human import get_or_create_config, serialize_config, update_config
 from app.services.digital_video import get_digital_video_status
+from app.services.evaluation import load_latest_evaluation, run_evaluation
 from app.services.knowledge import import_docx_document, import_plain_text_document, import_xlsx_rows
 from app.services.rag import rag_status, rebuild_embeddings
 from app.services.routes import recommend_route
@@ -74,12 +83,22 @@ def ensure_runtime_schema() -> None:
         "fallback_message": "TEXT DEFAULT '数字人视频暂不可用，已切换为语音讲解。'",
         "service_boundary": "TEXT DEFAULT '仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。'",
     }
+    qa_log_defaults = {
+        "audio_url": "VARCHAR(500) DEFAULT ''",
+        "audio_status": "VARCHAR(20) DEFAULT 'pending'",
+        "audio_ready_seconds": "FLOAT DEFAULT 0.0",
+    }
     with engine.begin() as connection:
         rows = connection.exec_driver_sql("PRAGMA table_info(digital_human_configs)").fetchall()
         existing_columns = {row[1] for row in rows}
         for column_name, definition in column_defaults.items():
             if column_name not in existing_columns:
                 connection.exec_driver_sql(f"ALTER TABLE digital_human_configs ADD COLUMN {column_name} {definition}")
+        qa_rows = connection.exec_driver_sql("PRAGMA table_info(qa_logs)").fetchall()
+        existing_qa_columns = {row[1] for row in qa_rows}
+        for column_name, definition in qa_log_defaults.items():
+            if column_name not in existing_qa_columns:
+                connection.exec_driver_sql(f"ALTER TABLE qa_logs ADD COLUMN {column_name} {definition}")
 
 
 ensure_runtime_schema()
@@ -200,6 +219,11 @@ def chat_text(payload: ChatRequest, db: Session = Depends(get_db)):
             interpreted_question=payload.question,
             answer=result["answer"],
             audio_url=result["audio_url"],
+            audio_status=result["audio_status"],
+            english_available=result["english_available"],
+            answer_source=result["answer_source"],
+            model_name=result["model_name"],
+            lipsync_available=result["lipsync_available"],
             video_url=result["video_url"],
             video_status=result["video_status"],
             emotion=result["emotion"],
@@ -245,6 +269,11 @@ def chat_voice(
             interpreted_question=interpreted_question,
             answer=result["answer"],
             audio_url=result["audio_url"],
+            audio_status=result["audio_status"],
+            english_available=result["english_available"],
+            answer_source=result["answer_source"],
+            model_name=result["model_name"],
+            lipsync_available=result["lipsync_available"],
             video_url=result["video_url"],
             video_status=result["video_status"],
             emotion=result["emotion"],
@@ -254,9 +283,17 @@ def chat_voice(
     )
 
 
+@app.get("/api/chat/audio/{log_id}", response_model=AudioStatusResponse)
+def chat_audio_status(log_id: int):
+    status = get_audio_status(log_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="未找到对应问答记录。")
+    return AudioStatusResponse(data=AudioStatusData(**status))
+
+
 @app.post("/api/recommend/route", response_model=RouteResponse)
 def route_recommend(payload: RouteRequest, db: Session = Depends(get_db)):
-    route = recommend_route(db, payload.interest, payload.duration)
+    route = recommend_route(db, payload.interest, payload.duration, payload.user_id)
     return RouteResponse(data=RouteData(**route))
 
 
@@ -287,15 +324,16 @@ def chat_translate(payload: TranslateRequest, db: Session = Depends(get_db)):
     if not text:
         raise HTTPException(status_code=400, detail="缺少需要翻译的文本。")
 
-    translation = translate_answer_text(text, payload.target_language)
-    if not translation:
+    translation_result = build_translation_result(text, payload.target_language)
+    if not translation_result:
         raise HTTPException(status_code=503, detail="当前未配置英文回答服务。")
 
     return TranslateResponse(
         data=TranslateData(
             log_id=payload.log_id,
             target_language=payload.target_language,
-            translation=translation,
+            translation=translation_result["translation"],
+            audio_url=translation_result["audio_url"],
         )
     )
 
@@ -320,6 +358,8 @@ def admin_logs(limit: int = 50, db: Session = Depends(get_db)):
             emotion=item.emotion,
             satisfaction=item.satisfaction,
             response_seconds=item.response_seconds,
+            audio_status=(item.audio_status or "pending").strip() or "pending",
+            audio_ready_seconds=float(item.audio_ready_seconds or 0.0),
             source_titles=[to_simplified_chinese(value) for value in item.source_titles.split("|") if value],
             created_at=item.created_at,
         )
@@ -336,6 +376,21 @@ def admin_dashboard(db: Session = Depends(get_db)):
 @app.get("/api/admin/visitor-report", response_model=VisitorReportResponse)
 def admin_visitor_report(db: Session = Depends(get_db)):
     return VisitorReportResponse(data=build_visitor_report(db))
+
+
+@app.get("/api/admin/ai/status", response_model=AIStatusResponse)
+def admin_ai_status():
+    return AIStatusResponse(data=AIStatusData(**build_ai_status()))
+
+
+@app.get("/api/admin/evaluation/latest", response_model=EvaluationResponse)
+def admin_evaluation_latest():
+    return EvaluationResponse(data=EvaluationData(**load_latest_evaluation()))
+
+
+@app.post("/api/admin/evaluation/run", response_model=EvaluationResponse)
+def admin_evaluation_run(db: Session = Depends(get_db)):
+    return EvaluationResponse(data=EvaluationData(**run_evaluation(db)))
 
 
 @app.post("/api/admin/digital-human/config", response_model=DigitalHumanConfigResponse)

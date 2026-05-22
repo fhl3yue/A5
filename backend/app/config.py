@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     model_api_key: str = ""
     model_base_url: str = ""
     model_name: str = ""
+    model_timeout_seconds: float = 1.2
+    enable_english_translation: bool = True
+    english_model_api_key: str = ""
+    english_model_base_url: str = ""
+    english_model_name: str = ""
     embedding_api_key: str = ""
     embedding_base_url: str = "https://api.edgefn.net/v1"
     embedding_model: str = "BAAI/bge-m3"
@@ -44,6 +49,9 @@ class Settings(BaseSettings):
     official_materials_dir: str = "C:/Users/LWQ/Documents/Playground/cnsoftbei_a5_data"
     enable_tts: bool = True
     tts_voice: str = "zh-CN-XiaoxiaoNeural"
+    tts_max_chars: int = 520
+    enable_english_tts: bool = True
+    english_tts_voice: str = "en-US-JennyNeural"
     digital_video_enabled: bool = False
     digital_video_base_url: str = ""
     digital_video_api_key: str = ""

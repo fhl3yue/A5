@@ -1,8 +1,14 @@
 const state = {
   currentLogId: null,
   audio: null,
+  audioContext: null,
+  audioAnalyser: null,
+  audioSource: null,
+  lipSyncFrame: null,
+  lipSyncBuffer: null,
   video: null,
   answerTranslations: {},
+  pendingAudioPolls: {},
   recorder: null,
   recordingStream: null,
   recordingChunks: [],
@@ -404,6 +410,17 @@ const elements = {
   ragIndexedChunks: $("#ragIndexedChunks"),
   ragLastUpdated: $("#ragLastUpdated"),
   ragLastError: $("#ragLastError"),
+  aiMainModelStatus: $("#aiMainModelStatus"),
+  aiMainModelName: $("#aiMainModelName"),
+  aiRagStatus: $("#aiRagStatus"),
+  aiTtsStatus: $("#aiTtsStatus"),
+  aiEnglishStatus: $("#aiEnglishStatus"),
+  aiLipsyncStatus: $("#aiLipsyncStatus"),
+  runEvaluationButton: $("#runEvaluationButton"),
+  evaluationPassed: $("#evaluationPassed"),
+  evaluationAccuracy: $("#evaluationAccuracy"),
+  evaluationLatency: $("#evaluationLatency"),
+  evaluationCases: $("#evaluationCases"),
   visitorVideoStatus: $("#visitorVideoStatus"),
   visitorFallbackMessage: $("#visitorFallbackMessage"),
   visitorServiceBoundary: $("#visitorServiceBoundary"),
@@ -496,6 +513,90 @@ function setPetMode(mode) {
   if (mode) {
     elements.avatarFrame.classList.add(mode);
   }
+}
+
+function resetLipSync() {
+  if (state.lipSyncFrame) {
+    cancelAnimationFrame(state.lipSyncFrame);
+  }
+  try {
+    state.audioSource?.disconnect();
+    state.audioAnalyser?.disconnect();
+  } catch {
+    // Audio graph may already be closed by the browser.
+  }
+  state.lipSyncFrame = null;
+  state.audioAnalyser = null;
+  state.audioSource = null;
+  state.lipSyncBuffer = null;
+  if (elements.avatarFrame) {
+    elements.avatarFrame.classList.remove("audio-driven-speaking");
+    elements.avatarFrame.style.setProperty("--mouth-open", "0");
+    elements.avatarFrame.style.setProperty("--voice-level", "0");
+    elements.avatarFrame.style.setProperty("--mouth-scale", "1");
+    elements.avatarFrame.style.setProperty("--mouth-shift", "0px");
+    elements.avatarFrame.style.setProperty("--mouth-stroke", "7px");
+    elements.avatarFrame.style.setProperty("--head-lift", "0px");
+    elements.avatarFrame.style.setProperty("--head-rotate", "0deg");
+    elements.avatarFrame.style.setProperty("--avatar-lift", "0px");
+    elements.avatarFrame.style.setProperty("--avatar-scale", "1");
+    elements.avatarFrame.style.setProperty("--voice-glow", "18px");
+    elements.avatarFrame.style.setProperty("--eye-scale", "1");
+  }
+}
+
+function startAudioLipSync(audio) {
+  markSpeaking();
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass || !audio || !elements.avatarFrame) {
+    return;
+  }
+
+  try {
+    state.audioContext = state.audioContext || new AudioContextClass();
+    if (state.audioContext.state === "suspended") {
+      state.audioContext.resume();
+    }
+    const analyser = state.audioContext.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.58;
+    const source = state.audioContext.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(state.audioContext.destination);
+    state.audioAnalyser = analyser;
+    state.audioSource = source;
+    state.lipSyncBuffer = new Uint8Array(analyser.fftSize);
+    elements.avatarFrame.classList.add("audio-driven-speaking");
+    pumpLipSync();
+  } catch {
+    elements.avatarFrame.classList.add("audio-driven-speaking");
+  }
+}
+
+function pumpLipSync() {
+  if (!state.audioAnalyser || !state.lipSyncBuffer || !elements.avatarFrame) {
+    return;
+  }
+  state.audioAnalyser.getByteTimeDomainData(state.lipSyncBuffer);
+  let sum = 0;
+  for (const value of state.lipSyncBuffer) {
+    const centered = (value - 128) / 128;
+    sum += centered * centered;
+  }
+  const rms = Math.sqrt(sum / state.lipSyncBuffer.length);
+  const mouthOpen = Math.max(0.04, Math.min(1, rms * 4.8));
+  elements.avatarFrame.style.setProperty("--mouth-open", mouthOpen.toFixed(3));
+  elements.avatarFrame.style.setProperty("--voice-level", rms.toFixed(3));
+  elements.avatarFrame.style.setProperty("--mouth-scale", (0.55 + mouthOpen * 1.75).toFixed(3));
+  elements.avatarFrame.style.setProperty("--mouth-shift", `${(mouthOpen * 3).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--mouth-stroke", `${(5 + mouthOpen * 10).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--head-lift", `${(-mouthOpen * 3).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--head-rotate", `${(mouthOpen * 1.4).toFixed(2)}deg`);
+  elements.avatarFrame.style.setProperty("--avatar-lift", `${(-mouthOpen * 12).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--avatar-scale", (1 + mouthOpen * 0.035).toFixed(3));
+  elements.avatarFrame.style.setProperty("--voice-glow", `${(16 + mouthOpen * 18).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--eye-scale", (1 - mouthOpen * 0.08).toFixed(3));
+  state.lipSyncFrame = requestAnimationFrame(pumpLipSync);
 }
 
 function applyGuideMode(mode, { autofill = false } = {}) {
@@ -740,6 +841,73 @@ function renderRagStatus(status) {
   elements.ragLastError.textContent = status.last_error || "无";
 }
 
+function renderAiStatus(status) {
+  if (!elements.aiMainModelStatus || !status) {
+    return;
+  }
+  elements.aiMainModelStatus.textContent = status.main_model_configured ? "已配置" : "未配置";
+  elements.aiMainModelName.textContent = status.main_model_name || "-";
+  elements.aiRagStatus.textContent = status.rag_enabled ? (status.rag_configured ? "向量检索" : "关键词降级") : "关闭";
+  elements.aiTtsStatus.textContent = status.tts_enabled ? "中文语音开启" : "中文语音关闭";
+  elements.aiEnglishStatus.textContent = status.english_available
+    ? (status.english_tts_enabled ? "英文文本+语音" : "英文文本")
+    : "未配置";
+  elements.aiLipsyncStatus.textContent = status.lipsync_available ? "本地音频驱动" : "未启用";
+}
+
+function renderEvaluationStatus(data) {
+  if (!elements.evaluationPassed || !data) {
+    return;
+  }
+  const accuracy = Math.round((data.accuracy_rate || 0) * 100);
+  elements.evaluationPassed.textContent = data.total_cases
+    ? (data.passed ? "验收通过" : "需要优化")
+    : "尚未评测";
+  elements.evaluationAccuracy.textContent = data.total_cases
+    ? `${accuracy}% (${data.passed_cases}/${data.total_cases})`
+    : "-";
+  elements.evaluationLatency.textContent = data.total_cases
+    ? `${Number(data.latency_p95_seconds || 0).toFixed(2)}s P95`
+    : "-";
+  if (!data.case_results?.length) {
+    elements.evaluationCases.className = "evaluation-cases empty-state";
+    elements.evaluationCases.textContent = "点击“运行验收评测”后生成标准题结果。";
+    return;
+  }
+  elements.evaluationCases.className = "evaluation-cases";
+  elements.evaluationCases.innerHTML = data.case_results
+    .map(
+      (item) => `
+        <div class="evaluation-case ${item.passed ? "passed" : "failed"}">
+          <strong>${escapeHtml(item.passed ? "通过" : "未通过")}</strong>
+          <span>${escapeHtml(item.question)}</span>
+          <em>${Number(item.latency_seconds || 0).toFixed(2)}s / ${escapeHtml(item.answer_source || "-")}</em>
+        </div>
+      `
+    )
+    .join("");
+}
+
+async function runEvaluation() {
+  if (!elements.runEvaluationButton) {
+    return;
+  }
+  const originalText = elements.runEvaluationButton.textContent;
+  elements.runEvaluationButton.disabled = true;
+  elements.runEvaluationButton.textContent = "评测中...";
+  try {
+    const data = await apiFetch("/api/admin/evaluation/run", { method: "POST" });
+    renderEvaluationStatus(data);
+    showToast(data.passed ? "验收评测通过。" : "验收评测完成，仍有项目需要优化。", data.passed ? "success" : "error");
+    loadAdminData({ silent: true });
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    elements.runEvaluationButton.disabled = false;
+    elements.runEvaluationButton.textContent = originalText;
+  }
+}
+
 function setApiStatus(text, type) {
   elements.apiStatus.textContent = text;
   elements.apiStatus.className = `status-pill ${type}`;
@@ -751,9 +919,12 @@ function configureRuntimeLinks() {
   }
 }
 
-function addMessage(type, html, extraClass = "") {
+function addMessage(type, html, extraClass = "", logId = "") {
   const node = document.createElement("div");
   node.className = `message ${type} ${extraClass}`.trim();
+  if (logId) {
+    node.dataset.logId = String(logId);
+  }
   node.innerHTML = html;
   elements.chatMessages.appendChild(node);
   elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
@@ -761,6 +932,7 @@ function addMessage(type, html, extraClass = "") {
 }
 
 function renderRouteCard(data) {
+  const basis = Array.isArray(data.personalization_basis) ? data.personalization_basis.filter(Boolean) : [];
   return `
     <article class="route-card">
       <div>
@@ -771,6 +943,8 @@ function renderRouteCard(data) {
         ${data.route_spots.map((spot, index) => `<span class="route-step">${index + 1}. ${escapeHtml(spot)}</span>`).join("")}
       </div>
       <p>${escapeHtml(data.reason)}</p>
+      ${data.matched_interest ? `<span class="tag compact-tag">匹配偏好：${escapeHtml(data.matched_interest)}</span>` : ""}
+      ${basis.length ? `<div class="route-basis">${basis.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
     </article>
   `;
 }
@@ -843,19 +1017,86 @@ function renderFeedbackActions(logId) {
   `;
 }
 
-function renderTranslationBlock(text, targetLanguage = "en") {
-  if (!text) {
+function renderTranslationBlock(data, targetLanguage = "en") {
+  const translation = typeof data === "string" ? data : data?.translation || "";
+  const audioUrl = typeof data === "string" ? "" : data?.audio_url || "";
+  if (!translation) {
     return "";
   }
   const label = targetLanguage === "en" ? "English Answer" : targetLanguage;
+  const audioButton = audioUrl
+    ? `<button class="small-action translation-audio-action" type="button" data-audio-url="${escapeHtml(audioUrl)}">播放英文</button>`
+    : "";
   return `
     <div class="translation-card" data-translation-language="${escapeHtml(targetLanguage)}">
       <div class="translation-head">
         <span class="tag">${escapeHtml(label)}</span>
       </div>
-      <p>${escapeHtml(text)}</p>
+      <p>${escapeHtml(translation)}</p>
+      ${audioButton ? `<div class="message-actions translation-actions">${audioButton}</div>` : ""}
     </div>
   `;
+}
+
+function renderAudioAction(data) {
+  const status = data.audio_status || (data.audio_url ? "ready" : "pending");
+  if (status === "ready" && data.audio_url) {
+    return `<button class="small-action" type="button" data-audio-url="${escapeHtml(data.audio_url)}">播放回答</button>`;
+  }
+  if (status === "failed") {
+    return `<button class="small-action is-disabled" type="button" disabled title="语音生成失败">语音失败</button>`;
+  }
+  return `<button class="small-action is-disabled" type="button" disabled title="语音生成中">语音生成中</button>`;
+}
+
+function updateAnswerAudioUi(logId, data) {
+  const messageNode = elements.chatMessages?.querySelector(`.message[data-log-id="${logId}"]`);
+  if (!messageNode) {
+    return;
+  }
+  const actionSlot = messageNode.querySelector(`[data-audio-action-slot="${logId}"]`);
+  const lipTag = messageNode.querySelector(`[data-lipsync-tag="${logId}"]`);
+  if (actionSlot) {
+    actionSlot.innerHTML = renderAudioAction(data);
+  }
+  if (lipTag) {
+    lipTag.classList.toggle("hidden", !data.lipsync_available);
+  }
+}
+
+async function pollAnswerAudio(logId, options = {}) {
+  if (!logId || state.pendingAudioPolls[logId]) {
+    return;
+  }
+  state.pendingAudioPolls[logId] = true;
+  const autoPlay = Boolean(options.autoPlay);
+  let attempt = 0;
+  const maxAttempts = 24;
+
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    try {
+      const data = await apiFetch(`/api/chat/audio/${logId}`);
+      updateAnswerAudioUi(logId, data);
+      if (data.audio_status === "ready" && data.audio_url) {
+        delete state.pendingAudioPolls[logId];
+        if (autoPlay) {
+          playAudio(data.audio_url);
+        }
+        return;
+      }
+      if (data.audio_status === "failed") {
+        delete state.pendingAudioPolls[logId];
+        return;
+      }
+    } catch {
+      delete state.pendingAudioPolls[logId];
+      return;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 700));
+  }
+
+  delete state.pendingAudioPolls[logId];
 }
 
 function renderAnswer(data, options = {}) {
@@ -868,20 +1109,18 @@ function renderAnswer(data, options = {}) {
       </div>
     `
     : "";
-  const audioButton = data.audio_url
-    ? `<button class="small-action" type="button" data-audio-url="${escapeHtml(data.audio_url)}">播放回答</button>`
-    : "";
-  const translateButton = data.audio_url
-    ? `
+  const audioButton = renderAudioAction(data);
+  const translateDisabled = !data.english_available;
+  const translateButton = `
       <button
-        class="small-action translate-action"
+        class="small-action translate-action${translateDisabled ? " is-disabled" : ""}"
         type="button"
         data-translate-log-id="${data.log_id}"
         data-translate-language="en"
         data-translate-source="${escapeHtml(data.answer)}"
+        ${translateDisabled ? 'disabled title="英文回答服务未配置"' : ""}
       >English</button>
-    `
-    : "";
+    `;
   const videoReady = data.video_url && data.video_status === "ready";
   const videoButton = videoReady
     ? `<button class="small-action" type="button" data-video-url="${escapeHtml(data.video_url)}" data-fallback-audio-url="${escapeHtml(data.audio_url || "")}">播放数字人视频</button>`
@@ -889,6 +1128,9 @@ function renderAnswer(data, options = {}) {
   const videoTag = data.video_status && data.video_status !== "disabled"
     ? `<span class="tag">视频：${escapeHtml(data.video_status)}</span>`
     : "";
+  const sourceTag = data.answer_source ? `<span class="tag">来源：${escapeHtml(data.answer_source)}</span>` : "";
+  const modelTag = data.model_name ? `<span class="tag">模型：${escapeHtml(data.model_name)}</span>` : "";
+  const lipTag = `<span class="tag${data.lipsync_available ? "" : " hidden"}" data-lipsync-tag="${data.log_id}">口型同步</span>`;
 
   addMessage(
     "assistant",
@@ -900,16 +1142,21 @@ function renderAnswer(data, options = {}) {
       <div class="message-meta">
         <span class="tag">${escapeHtml(data.emotion || "neutral")}</span>
         <span class="tag">${Number(data.response_seconds || 0).toFixed(2)} 秒</span>
+        ${sourceTag}
+        ${modelTag}
+        ${lipTag}
         ${videoTag}
       </div>
       <div class="message-actions">
         ${videoButton}
-        ${audioButton}
+        <span data-audio-action-slot="${data.log_id}">${audioButton}</span>
         ${translateButton}
       </div>
       <div class="translation-slot" data-translation-slot="${data.log_id}"></div>
       ${renderFeedbackActions(data.log_id)}
-    `
+    `,
+    "",
+    data.log_id
   );
 
   setGuideState("已完成回答", data.interpreted_question || data.transcript || "欢迎继续提问");
@@ -918,6 +1165,8 @@ function renderAnswer(data, options = {}) {
     playDigitalVideo(data.video_url, data.audio_url);
   } else if (data.audio_url) {
     playAudio(data.audio_url);
+  } else if (data.audio_status === "pending") {
+    pollAnswerAudio(data.log_id, { autoPlay: true });
   }
 }
 
@@ -967,6 +1216,7 @@ async function askRouteLecture(question) {
       body: JSON.stringify({
         interest: trimmed,
         duration: trimmed,
+        user_id: "web-visitor",
       }),
     });
     loading.remove();
@@ -1064,11 +1314,13 @@ function playAudio(url) {
   stopVideoPlayback();
   stopAudioPlayback();
 
-  state.audio = new Audio(resolveMediaUrl(url));
-  state.audio.addEventListener("play", markSpeaking);
-  state.audio.addEventListener("ended", unmarkSpeaking);
-  state.audio.addEventListener("pause", unmarkSpeaking);
-  state.audio.play().catch((error) => {
+  const audio = new Audio(resolveMediaUrl(url));
+  audio.crossOrigin = "anonymous";
+  state.audio = audio;
+  audio.addEventListener("play", () => startAudioLipSync(audio));
+  audio.addEventListener("ended", unmarkSpeaking);
+  audio.addEventListener("pause", unmarkSpeaking);
+  audio.play().catch((error) => {
     unmarkSpeaking();
     showToast(`音频播放失败：${error.message}`, "error");
   });
@@ -1130,13 +1382,12 @@ function playDigitalVideo(url, fallbackAudioUrl = "") {
 
 function stopAudioPlayback() {
   if (!state.audio) {
+    resetLipSync();
     return;
   }
   state.audio.pause();
-  state.audio.removeEventListener("play", markSpeaking);
-  state.audio.removeEventListener("ended", unmarkSpeaking);
-  state.audio.removeEventListener("pause", unmarkSpeaking);
   state.audio = null;
+  resetLipSync();
 }
 
 function stopVideoPlayback() {
@@ -1161,6 +1412,7 @@ function markSpeaking() {
 }
 
 function unmarkSpeaking() {
+  resetLipSync();
   setPetMode(null);
   setPetSpeech(`${state.digitalHuman?.scenic_area || "景区"}导览中`);
 }
@@ -1181,6 +1433,7 @@ async function recommendRoute() {
       body: JSON.stringify({
         interest,
         duration,
+        user_id: "web-visitor",
       }),
     });
 
@@ -1271,8 +1524,11 @@ async function toggleTranslation(button) {
         target_language: targetLanguage,
       }),
     });
-    state.answerTranslations[cacheKey] = data.translation;
-    slot.innerHTML = renderTranslationBlock(data.translation, targetLanguage);
+    state.answerTranslations[cacheKey] = {
+      translation: data.translation,
+      audio_url: data.audio_url || "",
+    };
+    slot.innerHTML = renderTranslationBlock(state.answerTranslations[cacheKey], targetLanguage);
     button.dataset.expanded = "true";
     button.textContent = targetLanguage === "en" ? "收起英文" : "收起";
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
@@ -1310,13 +1566,15 @@ async function loadAdminData({ silent = false } = {}) {
   }
 
   try {
-    const [dashboard, report, logs, docs, videoStatus, ragStatus] = await Promise.all([
+    const [dashboard, report, logs, docs, videoStatus, ragStatus, aiStatus, evaluationStatus] = await Promise.all([
       apiFetch("/api/admin/dashboard"),
       apiFetch("/api/admin/visitor-report"),
       apiFetch("/api/admin/logs?limit=50"),
       apiFetch("/api/admin/docs"),
       apiFetch("/api/admin/digital-video/status"),
       apiFetch("/api/admin/rag/status"),
+      apiFetch("/api/admin/ai/status"),
+      apiFetch("/api/admin/evaluation/latest"),
     ]);
     renderDashboard(dashboard);
     renderVisitorReport(report);
@@ -1324,6 +1582,8 @@ async function loadAdminData({ silent = false } = {}) {
     renderKnowledgeDocs(docs);
     renderDigitalVideoStatus(videoStatus);
     renderRagStatus(ragStatus);
+    renderAiStatus(aiStatus);
+    renderEvaluationStatus(evaluationStatus);
     if (!silent) {
       showToast("后台数据已刷新。");
     }
@@ -1558,7 +1818,7 @@ function renderServiceSuggestions(items) {
 
 function renderLogs(logs = []) {
   if (!logs.length) {
-    elements.logsTableBody.innerHTML = `<tr><td colspan="7">暂无问答日志。</td></tr>`;
+    elements.logsTableBody.innerHTML = `<tr><td colspan="8">暂无问答日志。</td></tr>`;
     return;
   }
 
@@ -1572,6 +1832,7 @@ function renderLogs(logs = []) {
           <td data-label="情绪">${escapeHtml(item.emotion)}</td>
           <td data-label="评分">${item.satisfaction ?? "-"}</td>
           <td data-label="耗时">${Number(item.response_seconds || 0).toFixed(2)}s</td>
+          <td data-label="语音">${escapeHtml(item.audio_status || "pending")}</td>
           <td data-label="时间">${formatTime(item.created_at)}</td>
         </tr>
       `
@@ -1973,6 +2234,7 @@ function bindEvents() {
   elements.reloadKnowledgeButton.addEventListener("click", () => loadKnowledgeDocs());
   elements.refreshVideoStatusButton.addEventListener("click", () => loadDigitalVideoStatus({ silent: false }));
   elements.rebuildRagButton.addEventListener("click", rebuildRagIndex);
+  elements.runEvaluationButton?.addEventListener("click", runEvaluation);
 
   elements.uploadForm.addEventListener("submit", (event) => {
     event.preventDefault();
