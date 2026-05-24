@@ -807,7 +807,13 @@ def clean_chunk_content(content: str) -> str:
     return text
 
 
-def answer_question(db: Session, question: str, user_id: str = "guest", enqueue_audio: bool = True) -> dict:
+def answer_question(
+    db: Session,
+    question: str,
+    user_id: str = "guest",
+    enqueue_audio: bool = True,
+    tts_mode: str = "auto",
+) -> dict:
     started = time.perf_counter()
     question = normalize_text(question)
     digital_human = get_or_create_config(db)
@@ -883,8 +889,13 @@ def answer_question(db: Session, question: str, user_id: str = "guest", enqueue_
             if not reference_titles and spot is None:
                 reference_titles = [build_gap_marker(question)]
 
-    should_enqueue_audio = bool(settings.enable_tts and enqueue_audio)
-    audio_status = "pending" if should_enqueue_audio else "failed"
+    tts_mode = tts_mode if tts_mode in {"auto", "local_preferred", "server_only"} else "auto"
+    should_enqueue_audio = bool(settings.enable_tts and enqueue_audio and tts_mode != "local_preferred")
+    tts_mode_used = "browser_local" if tts_mode == "local_preferred" else "server_async"
+    if tts_mode == "local_preferred":
+        audio_status = "not_requested"
+    else:
+        audio_status = "pending" if should_enqueue_audio else "failed"
     audio_url = None
     digital_video = generate_digital_video(answer, None)
     elapsed = round(time.perf_counter() - started, 3)
@@ -915,6 +926,7 @@ def answer_question(db: Session, question: str, user_id: str = "guest", enqueue_
         "answer_source": answer_source,
         "model_name": main_model_name() if model_service_configured() else "",
         "lipsync_available": False,
+        "tts_mode_used": tts_mode_used,
         "video_url": digital_video.video_url,
         "video_status": digital_video.video_status,
         "emotion": emotion,

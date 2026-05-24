@@ -8,7 +8,11 @@ const state = {
   lipSyncBuffer: null,
   video: null,
   answerTranslations: {},
+  answerPayloads: {},
   pendingAudioPolls: {},
+  pendingServerAudioRequests: {},
+  localSpeechUtterance: null,
+  localSpeechTimer: null,
   recorder: null,
   recordingStream: null,
   recordingChunks: [],
@@ -515,10 +519,98 @@ function setPetMode(mode) {
   }
 }
 
+function isMobileRuntime() {
+  return runtimeClient === "android" || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+}
+
+function browserLocalTtsSupported() {
+  return !isMobileRuntime() && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+function preferredTtsMode() {
+  return browserLocalTtsSupported() ? "local_preferred" : "server_only";
+}
+
+function pickChineseVoice() {
+  if (!browserLocalTtsSupported()) {
+    return null;
+  }
+  const voices = window.speechSynthesis.getVoices() || [];
+  return (
+    voices.find((voice) => voice.lang === "zh-CN") ||
+    voices.find((voice) => /^zh/i.test(voice.lang || "")) ||
+    voices.find((voice) => /Chinese|Mandarin|Xiaoxiao|Yunxi/i.test(`${voice.name} ${voice.lang}`)) ||
+    null
+  );
+}
+
+function waitForChineseVoice(timeoutMs = 700) {
+  const voice = pickChineseVoice();
+  if (voice) {
+    return Promise.resolve(voice);
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (nextVoice) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.speechSynthesis.onvoiceschanged = null;
+      resolve(nextVoice || null);
+    };
+    window.speechSynthesis.onvoiceschanged = () => finish(pickChineseVoice());
+    window.setTimeout(() => finish(pickChineseVoice()), timeoutMs);
+  });
+}
+
+function pulseLocalSpeechMouth() {
+  if (!elements.avatarFrame) {
+    return;
+  }
+  const mouthOpen = 0.28 + Math.random() * 0.42;
+  elements.avatarFrame.classList.add("audio-driven-speaking");
+  elements.avatarFrame.style.setProperty("--mouth-open", mouthOpen.toFixed(3));
+  elements.avatarFrame.style.setProperty("--voice-level", (mouthOpen / 4).toFixed(3));
+  elements.avatarFrame.style.setProperty("--mouth-scale", (0.72 + mouthOpen * 1.45).toFixed(3));
+  elements.avatarFrame.style.setProperty("--mouth-shift", `${(mouthOpen * 3).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--mouth-stroke", `${(5 + mouthOpen * 9).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--head-lift", `${(-mouthOpen * 2.4).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--head-rotate", `${(mouthOpen * 1.1).toFixed(2)}deg`);
+  elements.avatarFrame.style.setProperty("--avatar-lift", `${(-mouthOpen * 9).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--avatar-scale", (1 + mouthOpen * 0.025).toFixed(3));
+  elements.avatarFrame.style.setProperty("--voice-glow", `${(16 + mouthOpen * 16).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--eye-scale", (1 - mouthOpen * 0.06).toFixed(3));
+}
+
+function startLocalSpeechLipSync() {
+  markSpeaking();
+  window.clearInterval(state.localSpeechTimer);
+  state.localSpeechTimer = window.setInterval(pulseLocalSpeechMouth, 120);
+  pulseLocalSpeechMouth();
+}
+
+function stopLocalSpeech() {
+  window.clearInterval(state.localSpeechTimer);
+  state.localSpeechTimer = null;
+  if (state.localSpeechUtterance) {
+    state.localSpeechUtterance.onstart = null;
+    state.localSpeechUtterance.onend = null;
+    state.localSpeechUtterance.onerror = null;
+    state.localSpeechUtterance.onboundary = null;
+  }
+  state.localSpeechUtterance = null;
+  if (browserLocalTtsSupported()) {
+    window.speechSynthesis.cancel();
+  }
+}
+
 function resetLipSync() {
   if (state.lipSyncFrame) {
     cancelAnimationFrame(state.lipSyncFrame);
   }
+  window.clearInterval(state.localSpeechTimer);
+  state.localSpeechTimer = null;
   try {
     state.audioSource?.disconnect();
     state.audioAnalyser?.disconnect();
@@ -1040,6 +1132,9 @@ function renderTranslationBlock(data, targetLanguage = "en") {
 
 function renderAudioAction(data) {
   const status = data.audio_status || (data.audio_url ? "ready" : "pending");
+  if (data.tts_mode_used === "browser_local" && status === "not_requested") {
+    return `<button class="small-action" type="button" data-local-tts-log-id="${data.log_id}">播放回答</button>`;
+  }
   if (status === "ready" && data.audio_url) {
     return `<button class="small-action" type="button" data-audio-url="${escapeHtml(data.audio_url)}">播放回答</button>`;
   }
@@ -1061,6 +1156,9 @@ function updateAnswerAudioUi(logId, data) {
   }
   if (lipTag) {
     lipTag.classList.toggle("hidden", !data.lipsync_available);
+  }
+  if (state.answerPayloads[logId]) {
+    state.answerPayloads[logId] = { ...state.answerPayloads[logId], ...data };
   }
 }
 
@@ -1099,8 +1197,75 @@ async function pollAnswerAudio(logId, options = {}) {
   delete state.pendingAudioPolls[logId];
 }
 
+async function requestServerAudioFallback(logId, options = {}) {
+  if (!logId || state.pendingServerAudioRequests[logId]) {
+    return;
+  }
+  state.pendingServerAudioRequests[logId] = true;
+  try {
+    const data = await apiFetch(`/api/chat/audio/${logId}/request`, { method: "POST" });
+    updateAnswerAudioUi(logId, data);
+    if (data.audio_status === "ready" && data.audio_url) {
+      if (options.autoPlay) {
+        playAudio(data.audio_url);
+      }
+      return;
+    }
+    pollAnswerAudio(logId, { autoPlay: Boolean(options.autoPlay) });
+  } catch (error) {
+    showToast(`语音回退失败：${error.message}`, "error");
+  } finally {
+    delete state.pendingServerAudioRequests[logId];
+  }
+}
+
+async function playLocalAnswer(data, options = {}) {
+  if (!data?.answer || !browserLocalTtsSupported()) {
+    requestServerAudioFallback(data?.log_id, options);
+    return false;
+  }
+  stopVideoPlayback();
+  stopAudioPlayback();
+  stopLocalSpeech();
+
+  const voice = await waitForChineseVoice();
+  if (!voice) {
+    requestServerAudioFallback(data.log_id, options);
+    return false;
+  }
+
+  const utterance = new SpeechSynthesisUtterance(data.answer);
+  utterance.lang = voice.lang || "zh-CN";
+  utterance.voice = voice;
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.onstart = startLocalSpeechLipSync;
+  utterance.onboundary = pulseLocalSpeechMouth;
+  utterance.onend = () => {
+    state.localSpeechUtterance = null;
+    unmarkSpeaking();
+  };
+  utterance.onerror = () => {
+    state.localSpeechUtterance = null;
+    unmarkSpeaking();
+    requestServerAudioFallback(data.log_id, options);
+  };
+
+  state.localSpeechUtterance = utterance;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+
+  window.setTimeout(() => {
+    if (state.localSpeechUtterance === utterance && !window.speechSynthesis.speaking) {
+      requestServerAudioFallback(data.log_id, options);
+    }
+  }, 800);
+  return true;
+}
+
 function renderAnswer(data, options = {}) {
   state.currentLogId = data.log_id;
+  state.answerPayloads[data.log_id] = data;
   const transcriptBlock = options.showTranscript
     ? `
       <div class="message-meta">
@@ -1130,7 +1295,7 @@ function renderAnswer(data, options = {}) {
     : "";
   const sourceTag = data.answer_source ? `<span class="tag">来源：${escapeHtml(data.answer_source)}</span>` : "";
   const modelTag = data.model_name ? `<span class="tag">模型：${escapeHtml(data.model_name)}</span>` : "";
-  const lipTag = `<span class="tag${data.lipsync_available ? "" : " hidden"}" data-lipsync-tag="${data.log_id}">口型同步</span>`;
+  const lipTag = `<span class="tag${data.lipsync_available || data.tts_mode_used === "browser_local" ? "" : " hidden"}" data-lipsync-tag="${data.log_id}">口型同步</span>`;
 
   addMessage(
     "assistant",
@@ -1163,6 +1328,8 @@ function renderAnswer(data, options = {}) {
   setPetMode("success");
   if (videoReady) {
     playDigitalVideo(data.video_url, data.audio_url);
+  } else if (data.tts_mode_used === "browser_local") {
+    playLocalAnswer(data, { autoPlay: true });
   } else if (data.audio_url) {
     playAudio(data.audio_url);
   } else if (data.audio_status === "pending") {
@@ -1187,7 +1354,7 @@ async function askText(question) {
   try {
     const data = await apiFetch("/api/chat/text", {
       method: "POST",
-      body: JSON.stringify({ question: trimmed, user_id: "web-visitor" }),
+      body: JSON.stringify({ question: trimmed, user_id: "web-visitor", tts_mode: preferredTtsMode() }),
     });
     loading.remove();
     renderAnswer(data);
@@ -1244,6 +1411,7 @@ async function askRouteLecture(question) {
 async function sendVoice(blob, filename = "visitor-question.webm") {
   const formData = new FormData();
   formData.append("user_id", "web-visitor");
+  formData.append("tts_mode", preferredTtsMode());
   formData.append("file", blob, filename);
 
   addMessage("user", "已上传一段语音问题。");
@@ -1312,6 +1480,7 @@ function playAudio(url) {
     return;
   }
   stopVideoPlayback();
+  stopLocalSpeech();
   stopAudioPlayback();
 
   const audio = new Audio(resolveMediaUrl(url));
@@ -1334,6 +1503,7 @@ function playDigitalVideo(url, fallbackAudioUrl = "") {
     return;
   }
 
+  stopLocalSpeech();
   stopAudioPlayback();
   stopVideoPlayback();
 
@@ -2209,6 +2379,13 @@ function bindEvents() {
     const audioButton = event.target.closest("[data-audio-url]");
     if (audioButton) {
       playAudio(audioButton.dataset.audioUrl);
+      return;
+    }
+
+    const localTtsButton = event.target.closest("[data-local-tts-log-id]");
+    if (localTtsButton) {
+      const payload = state.answerPayloads[localTtsButton.dataset.localTtsLogId];
+      playLocalAnswer(payload, { autoPlay: true });
       return;
     }
 

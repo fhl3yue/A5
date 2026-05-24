@@ -57,7 +57,7 @@ from app.schemas import (
 )
 from app.services.analytics import build_dashboard, build_visitor_report
 from app.services.ai_status import build_ai_status
-from app.services.audio_tasks import get_audio_status
+from app.services.audio_tasks import get_audio_status, request_answer_audio
 from app.services.chat import answer_question, build_translation_result
 from app.services.digital_human import get_or_create_config, serialize_config, update_config
 from app.services.digital_video import get_digital_video_status
@@ -211,7 +211,7 @@ def health():
 
 @app.post("/api/chat/text", response_model=ChatResponse)
 def chat_text(payload: ChatRequest, db: Session = Depends(get_db)):
-    result = answer_question(db, payload.question, payload.user_id)
+    result = answer_question(db, payload.question, payload.user_id, tts_mode=payload.tts_mode)
     return ChatResponse(
         data=ChatData(
             log_id=result["log_id"],
@@ -224,6 +224,7 @@ def chat_text(payload: ChatRequest, db: Session = Depends(get_db)):
             answer_source=result["answer_source"],
             model_name=result["model_name"],
             lipsync_available=result["lipsync_available"],
+            tts_mode_used=result["tts_mode_used"],
             video_url=result["video_url"],
             video_status=result["video_status"],
             emotion=result["emotion"],
@@ -237,6 +238,7 @@ def chat_text(payload: ChatRequest, db: Session = Depends(get_db)):
 def chat_voice(
     transcript: str = Form(default=""),
     user_id: str = Form(default="guest"),
+    tts_mode: str = Form(default="auto"),
     file: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
 ):
@@ -261,7 +263,7 @@ def chat_voice(
         raise HTTPException(status_code=400, detail="未能识别出有效语音内容，请重试或直接传 transcript。")
 
     interpreted_question = refine_voice_question(derived_transcript)
-    result = answer_question(db, interpreted_question, user_id)
+    result = answer_question(db, interpreted_question, user_id, tts_mode=tts_mode)
     return ChatResponse(
         data=ChatData(
             log_id=result["log_id"],
@@ -274,6 +276,7 @@ def chat_voice(
             answer_source=result["answer_source"],
             model_name=result["model_name"],
             lipsync_available=result["lipsync_available"],
+            tts_mode_used=result["tts_mode_used"],
             video_url=result["video_url"],
             video_status=result["video_status"],
             emotion=result["emotion"],
@@ -288,6 +291,15 @@ def chat_audio_status(log_id: int):
     status = get_audio_status(log_id)
     if status is None:
         raise HTTPException(status_code=404, detail="未找到对应问答记录。")
+    return AudioStatusResponse(data=AudioStatusData(**status))
+
+
+@app.post("/api/chat/audio/{log_id}/request", response_model=AudioStatusResponse)
+def chat_audio_request(log_id: int, db: Session = Depends(get_db)):
+    digital_human = get_or_create_config(db)
+    status = request_answer_audio(db, log_id, digital_human.voice_name)
+    if status is None:
+        raise HTTPException(status_code=404, detail="鏈壘鍒板搴旈棶绛旇褰曘€?")
     return AudioStatusResponse(data=AudioStatusData(**status))
 
 

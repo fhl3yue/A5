@@ -2,6 +2,7 @@ import threading
 import time
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import QALog
@@ -30,9 +31,35 @@ def get_audio_status(log_id: int) -> dict | None:
             "audio_status": (log.audio_status or "pending").strip() or "pending",
             "audio_url": audio_url,
             "lipsync_available": bool(audio_url),
+            "tts_mode_used": "server_async" if audio_url or log.audio_status != "not_requested" else "browser_local",
         }
     finally:
         db.close()
+
+
+def request_answer_audio(db: Session, log_id: int, voice_name: str | None = None) -> dict | None:
+    log = db.get(QALog, log_id)
+    if log is None:
+        return None
+
+    audio_url = log.audio_url.strip() or None
+    audio_status = (log.audio_status or "pending").strip() or "pending"
+    if audio_url:
+        audio_status = "ready"
+    elif audio_status != "pending":
+        log.audio_status = "pending"
+        log.audio_ready_seconds = 0.0
+        db.commit()
+        queue_answer_audio(log.id, log.answer, voice_name)
+        audio_status = "pending"
+
+    return {
+        "log_id": log.id,
+        "audio_status": audio_status,
+        "audio_url": audio_url,
+        "lipsync_available": bool(audio_url),
+        "tts_mode_used": "server_async",
+    }
 
 
 def _build_answer_audio(log_id: int, text: str, voice_name: str | None = None) -> None:

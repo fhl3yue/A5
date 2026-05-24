@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
     user_id: str = "guest"
+    tts_mode: str = Field(default="auto", pattern="^(auto|local_preferred|server_only)$")
 
 
 class ChatData(BaseModel):
@@ -19,6 +20,7 @@ class ChatData(BaseModel):
     answer_source: str = "local"
     model_name: str = ""
     lipsync_available: bool = False
+    tts_mode_used: str = "server_async"
     video_url: str | None = None
     video_status: str = "disabled"
     emotion: str = "neutral"
@@ -75,6 +77,7 @@ class AudioStatusData(BaseModel):
     audio_status: str
     audio_url: str | None = None
     lipsync_available: bool = False
+    tts_mode_used: str = "server_async"
 
 
 class AudioStatusResponse(BaseModel):
