@@ -2,9 +2,9 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>灵山胜境 AI 数字人导览</title>
-    <link rel="stylesheet" href="./styles.css?v=20260522-ai-complete" />
+    <link rel="stylesheet" href="./styles.css?v=20260601-vision-guide" />
   </head>
   <body>
     <div class="app-shell">
@@ -22,7 +22,6 @@
           <a id="docsLink" class="docs-link" href="/docs" target="_blank" rel="noreferrer">开发文档</a>
         </nav>
       </header>
-
       <main>
         <section id="visitorView" class="view active">
           <div class="hero-band">
@@ -33,9 +32,9 @@
                   <div class="scene-chip">灵山胜境</div>
                 </div>
                 <div class="stage-status-strip" aria-label="导览状态">
-                  <span>云端视频</span>
-                  <span>知识库在线</span>
-                  <span>音频回退</span>
+                  <span>导览讲解</span>
+                  <span>语音播报</span>
+                  <span>英文辅助</span>
                 </div>
               </div>
               <div class="avatar-frame pet-frame" id="avatarFrame">
@@ -198,12 +197,12 @@
               <div class="stage-copy">
                 <p class="eyebrow">实时讲解</p>
                 <h2 id="guideStatus">欢迎使用景区导览数字人</h2>
-                <p id="guideSubtitle">当前接入灵山胜境示范知识库，可通过后台更换景区资料。</p>
+                <p id="guideSubtitle">可以为你讲解景点、规划路线，也支持语音提问和英文回答。</p>
               </div>
               <div class="stage-data-row" aria-label="导览能力状态">
-                <span><strong>8s</strong> 视频等待上限</span>
-                <span><strong>HTTPS</strong> 云端服务</span>
-                <span><strong>Web</strong> EXE / APK 壳</span>
+                <span><strong>即时</strong> 问答讲解</span>
+                <span><strong>语音</strong> 同步播报</span>
+                <span><strong>路线</strong> 个性推荐</span>
               </div>
             </section>
 
@@ -213,7 +212,6 @@
                   <p class="eyebrow">Visitor Console</p>
                   <h2>智能导览问答</h2>
                 </div>
-                <span class="status-pill" id="apiStatus">服务待检测</span>
               </div>
               <div class="console-metrics" aria-label="游客端运行状态">
                 <span><strong>问答</strong> 文本 / 语音</span>
@@ -221,8 +219,8 @@
                 <span><strong>场景</strong> 游客端</span>
               </div>
 
-              <p class="micro-label">当前知识库推荐问题</p>
-              <div class="quick-questions" aria-label="当前知识库推荐问题">
+              <p class="micro-label">推荐提问</p>
+              <div class="quick-questions" aria-label="推荐提问">
                 <button type="button" data-question="九龙灌浴几点开始表演">九龙灌浴几点开始表演</button>
                 <button type="button" data-question="灵山大佛有什么文化含义">灵山大佛有什么文化含义</button>
                 <button type="button" data-question="我只有半天时间，怎么游览">半天怎么游览</button>
@@ -247,18 +245,19 @@
                     placeholder="输入你的问题，例如：九龙灌浴几点开始表演"
                     aria-label="文本提问"
                   />
+                  <button id="recordButton" class="composer-icon-button" type="button" aria-label="语音输入">语音</button>
+                  <label class="composer-icon-button file-trigger" aria-label="上传音频">
+                    上传
+                    <input id="voiceFileInput" type="file" accept="audio/*" />
+                  </label>
+                  <label class="composer-icon-button file-trigger" aria-label="上传景区图片">
+                    图片
+                    <input id="imageFileInput" type="file" accept="image/*" />
+                  </label>
+                  <button id="chatSubmitButton" class="primary-button send-button" type="submit">发送</button>
                 </div>
-                <button class="primary-button" type="submit">发送</button>
-              </form>
-
-              <div class="voice-row">
-                <button id="recordButton" class="ghost-button" type="button">开始录音</button>
-                <label class="file-trigger">
-                  上传音频
-                  <input id="voiceFileInput" type="file" accept="audio/*" />
-                </label>
                 <span id="voiceHint">语音待命</span>
-              </div>
+              </form>
             </section>
           </div>
 
@@ -305,6 +304,10 @@
                 <span>拍摄前留意现场标识</span>
                 <span>高峰时段按动线分流</span>
               </div>
+              <div class="mini-monitor etiquette-monitor" aria-label="礼仪提示覆盖">
+                <span><strong>3</strong><em>条核心提示</em></span>
+                <span><strong>轻声</strong><em>推荐参观状态</em></span>
+              </div>
             </section>
             <section class="service-panel workbench-panel" aria-label="服务状态">
               <div class="section-heading compact-heading">
@@ -314,9 +317,14 @@
                 </div>
               </div>
               <div class="service-stack">
-                <span><strong>数字人视频</strong><em id="visitorVideoStatus">就绪优先播放</em></span>
-                <span><strong>语音问答</strong><em id="visitorFallbackMessage">失败自动回退</em></span>
-                <span><strong>内容边界</strong><em id="visitorServiceBoundary">知识库生成</em></span>
+                <span><strong>数字人讲解</strong><em id="visitorVideoStatus">准备就绪</em></span>
+                <span><strong>语音互动</strong><em id="visitorFallbackMessage">可直接提问</em></span>
+                <span><strong>导览范围</strong><em id="visitorServiceBoundary">围绕景区服务</em></span>
+              </div>
+              <div class="mini-monitor service-monitor" aria-label="服务能力监控">
+                <span><strong>文本</strong><em>即时响应</em></span>
+                <span><strong>语音</strong><em>本地优先</em></span>
+                <span><strong>英文</strong><em>按需展开</em></span>
               </div>
             </section>
           </div>
@@ -625,7 +633,9 @@
                 <span>中文主模型：<strong id="aiMainModelStatus">待检测</strong></span>
                 <span>模型名称：<strong id="aiMainModelName">-</strong></span>
                 <span>RAG 检索：<strong id="aiRagStatus">待检测</strong></span>
+                <span>多模态视觉：<strong id="aiVisionStatus">待检测</strong></span>
                 <span>中文语音：<strong id="aiTtsStatus">待检测</strong></span>
+                <span>服务端语音：<strong id="aiServerTtsStatus">待检测</strong></span>
                 <span>英文回答：<strong id="aiEnglishStatus">待检测</strong></span>
                 <span>口型同步：<strong id="aiLipsyncStatus">待检测</strong></span>
               </div>
@@ -693,6 +703,6 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=20260522-ai-complete" defer></script>
+    <script src="./app.js?v=20260601-vision-guide" defer></script>
   </body>
 </html>

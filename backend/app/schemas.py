@@ -26,6 +26,10 @@ class ChatData(BaseModel):
     emotion: str = "neutral"
     reference: list[str] = []
     response_seconds: float = 0.0
+    vision_summary: str = ""
+    matched_spot: str = ""
+    vision_model_name: str = ""
+    multimodal_source: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -231,7 +235,18 @@ class AIStatusData(BaseModel):
     main_model_name: str
     rag_enabled: bool
     rag_configured: bool
+    vision_enabled: bool = False
+    vision_configured: bool = False
+    vision_model_name: str = ""
     tts_enabled: bool
+    server_tts_provider: str = "auto"
+    local_tts_enabled: bool = False
+    local_tts_provider: str = ""
+    local_tts_base_url: str = ""
+    server_tts_ready: bool = False
+    server_tts_last_provider: str = ""
+    server_tts_last_error: str = ""
+    server_tts_last_elapsed_seconds: float = 0.0
     english_available: bool
     english_tts_enabled: bool
     lipsync_available: bool

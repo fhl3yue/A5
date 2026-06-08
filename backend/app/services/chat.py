@@ -20,7 +20,7 @@ POSITIVE_HINTS = ("谢谢", "不错", "喜欢", "推荐", "怎么游", "历史",
 NEGATIVE_HINTS = ("不好", "失望", "投诉", "差", "不行", "麻烦", "卡", "崩溃")
 ETIQUETTE_HINTS = ("礼仪", "礼貌", "注意", "禁忌", "规矩", "拍照", "殿堂", "寺院", "文明", "尊重", "秩序")
 GENERIC_RECOMMEND_HINTS = ("景点推荐", "推荐景点", "推荐一下", "有什么推荐", "必去", "必看", "打卡")
-ROUTE_QUESTION_HINTS = ("半天", "全天", "一天", "路线", "线路", "怎么游", "怎么玩", "游览", "行程")
+ROUTE_QUESTION_HINTS = ("半天", "全天", "一天", "路线", "线路", "怎么游", "怎么玩", "游览", "行程", "轻松", "不累", "逛一下", "逛逛")
 STRUCTURAL_NOISE_HINTS = ("字段规范", "字段说明", "数据集", "结构化数据", "景点ID", "具体位置", "景区名称、")
 KNOWLEDGE_GAP_MARKER = "知识库待补充"
 PARKING_HINTS = ("停车", "停车场", "泊车", "停车位")
@@ -43,6 +43,10 @@ PROVINCE_CITY_PATTERN = re.compile(
     r"((?:河北|山西|辽宁|吉林|黑龙江|江苏|浙江|安徽|福建|江西|山东|河南|湖北|湖南|广东|海南|四川|贵州|云南|陕西|甘肃|青海|台湾)省[\u4e00-\u9fff]{2,6}市|(?:北京|上海|天津|重庆)市)"
 )
 TIME_PATTERN = re.compile(r"(?:[01]?\d|2[0-3])[:：][0-5]\d")
+BROKEN_SENTENCE_TAIL_PATTERN = re.compile(r"[，,、：:](?:地|位|坐|在|处|位于|坐落|地处|介绍|详细|文化|开放|演出|游玩|亮点)\s*[。；;]?$")
+FIELD_PREFIX_PATTERN = re.compile(
+    r"^(?:景点名称|景点类型|位置|地址|景区名称|介绍内容|详细介绍|文化内涵方面|文化内涵|游玩亮点|开放或演出信息|开放信息|演出信息)[:：]\s*"
+)
 
 
 def infer_emotion(text: str) -> str:
@@ -222,7 +226,11 @@ def build_route_answer(db: Session, question: str, scenic_area: str, user_id: st
 
 
 def is_etiquette_question(question: str) -> bool:
-    return any(token in question for token in ETIQUETTE_HINTS)
+    if any(token in question for token in ("礼仪", "礼貌", "注意", "禁忌", "规矩", "殿堂", "寺院", "文明", "尊重", "秩序")):
+        return True
+    if "拍照" in question:
+        return any(token in question for token in ("能不能", "可以吗", "允许", "禁止", "闪光灯", "录音"))
+    return False
 
 
 def is_location_question(question: str) -> bool:
@@ -237,6 +245,19 @@ def wants_fine_grain_location(question: str) -> bool:
     if wants_province_city(question):
         return False
     return any(token in question for token in LOCATION_FINE_GRAIN_HINTS)
+
+
+def extract_concise_location(sentence: str, scenic_area: str) -> str | None:
+    cleaned = re.sub(r"^(位置|地址|景区名称|介绍内容|详细介绍)[:：]", "", sentence).strip()
+    match = re.search(
+        r"((?:江苏省)?无锡市[^，。；;]{0,36}(?:马山镇|度假区|景区|大道|区域|位置|地带|入口处|北端|核心位置|中轴线核心位置))",
+        cleaned,
+    )
+    if not match:
+        return None
+    location = match.group(1).rstrip("，,。；; ")
+    subject = scenic_area or "该景区"
+    return f"{subject}位于{location}。"
 
 
 def extract_location_answer(
@@ -264,7 +285,8 @@ def extract_location_answer(
     target = scenic_area if scenic_area and scenic_area in question else ""
     candidates: list[str] = []
     for chunk in references:
-        text = normalize_text(f"{chunk.title}。{chunk.content}")
+        # Titles imported from Word can be truncated; prefer full content for exact location extraction.
+        text = normalize_text(chunk.content or chunk.title)
         candidates.extend(part.strip() for part in re.split(r"[。；;\n]", text) if part.strip())
 
     location_words = ("位于", "坐落", "地处", "地址", "省", "市")
@@ -279,6 +301,9 @@ def extract_location_answer(
         )
         if province_city_mode and province_city:
             return f"{scenic_area or target or '该景区'}位于{province_city.group(1)}。"
+        concise_location = extract_concise_location(sentence, scenic_area or target)
+        if concise_location and (not fine_grain_mode or has_specific_location_detail(concise_location)):
+            return concise_location
         if any(word in sentence for word in ("位于", "坐落", "地处")):
             cleaned = re.sub(r"^(位置|地址|景区名称|介绍内容|详细介绍)[:：]", "", sentence).strip()
             if cleaned and len(cleaned) <= 90:
@@ -303,12 +328,6 @@ def extract_location_answer(
 
 
 def classify_question_intent(question: str) -> str:
-    if is_location_question(question):
-        if wants_province_city(question):
-            return "location_province_city"
-        if wants_fine_grain_location(question):
-            return "location_fine_grain"
-        return "location_general"
     if any(token in question for token in PARKING_HINTS):
         return "parking"
     if any(token in question for token in TICKET_HINTS):
@@ -317,6 +336,12 @@ def classify_question_intent(question: str) -> str:
         return "traffic"
     if any(token in question for token in SERVICE_HINTS):
         return "service"
+    if is_location_question(question):
+        if wants_province_city(question):
+            return "location_province_city"
+        if wants_fine_grain_location(question):
+            return "location_fine_grain"
+        return "location_general"
     if any(token in question for token in SCHEDULE_HINTS):
         return "schedule"
     if any(token in question for token in CULTURE_HINTS):
@@ -338,11 +363,7 @@ def split_reference_sentences(references: list[KnowledgeChunk]) -> list[str]:
 
 def clean_answer_fragment(text: str) -> str:
     cleaned = normalize_text(text)
-    cleaned = re.sub(
-        r"^(位置|地址|景区名称|介绍内容|详细介绍|开放或演出信息|开放信息|演出信息|文化内涵方面|文化内涵|游玩亮点)[:：]",
-        "",
-        cleaned,
-    ).strip()
+    cleaned = FIELD_PREFIX_PATTERN.sub("", cleaned).strip()
     return cleaned.rstrip("。；; ")
 
 
@@ -351,6 +372,17 @@ def ensure_sentence(text: str) -> str:
     if not cleaned:
         return ""
     return cleaned if cleaned.endswith("。") else f"{cleaned}。"
+
+
+def clean_final_answer(text: str) -> str:
+    cleaned = normalize_text(text).strip()
+    if not cleaned:
+        return ""
+    cleaned = FIELD_PREFIX_PATTERN.sub("", cleaned).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"(。){2,}", "。", cleaned)
+    cleaned = BROKEN_SENTENCE_TAIL_PATTERN.sub("", cleaned).rstrip("，,、：:；; ")
+    return ensure_sentence(cleaned)
 
 
 def compose_named_answer(subject: str, prefix: str, body: str) -> str:
@@ -869,7 +901,7 @@ def answer_question(
                     llm_valid, _ = validate_local_answer(question, llm_answer, references, spot)
                     if not llm_valid:
                         llm_answer = None
-            answer = to_simplified_chinese(llm_answer or local_answer or fallback_answer(question, references, spot))
+            answer = llm_answer or local_answer or fallback_answer(question, references, spot)
             if llm_answer:
                 answer_source = "rag_model_repair" if rag_used else "keyword_model_repair"
             elif direct_answer and not repaired_local:
@@ -889,6 +921,7 @@ def answer_question(
             if not reference_titles and spot is None:
                 reference_titles = [build_gap_marker(question)]
 
+    answer = clean_final_answer(answer)
     tts_mode = tts_mode if tts_mode in {"auto", "local_preferred", "server_only"} else "auto"
     should_enqueue_audio = bool(settings.enable_tts and enqueue_audio and tts_mode != "local_preferred")
     tts_mode_used = "browser_local" if tts_mode == "local_preferred" else "server_async"

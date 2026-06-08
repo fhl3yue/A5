@@ -331,11 +331,13 @@ const elements = {
   guideSubtitle: $("#guideSubtitle"),
   chatMessages: $("#chatMessages"),
   textChatForm: $("#textChatForm"),
+  chatSubmitButton: $("#chatSubmitButton"),
   guideModeSelect: $("#guideModeSelect"),
   questionInput: $("#questionInput"),
   recordButton: $("#recordButton"),
   voiceHint: $("#voiceHint"),
   voiceFileInput: $("#voiceFileInput"),
+  imageFileInput: $("#imageFileInput"),
   routeForm: $("#routeForm"),
   interestSelect: $("#interestSelect"),
   interestCustomInput: $("#interestCustomInput"),
@@ -417,7 +419,9 @@ const elements = {
   aiMainModelStatus: $("#aiMainModelStatus"),
   aiMainModelName: $("#aiMainModelName"),
   aiRagStatus: $("#aiRagStatus"),
+  aiVisionStatus: $("#aiVisionStatus"),
   aiTtsStatus: $("#aiTtsStatus"),
+  aiServerTtsStatus: $("#aiServerTtsStatus"),
   aiEnglishStatus: $("#aiEnglishStatus"),
   aiLipsyncStatus: $("#aiLipsyncStatus"),
   runEvaluationButton: $("#runEvaluationButton"),
@@ -790,10 +794,10 @@ function applyDigitalHumanConfig(config) {
   elements.petSpeech.textContent = `${config.scenic_area}导览中`;
   elements.guideSubtitle.textContent = config.greeting;
   if (elements.visitorFallbackMessage) {
-    elements.visitorFallbackMessage.textContent = config.fallback_message || "失败自动回退";
+    elements.visitorFallbackMessage.textContent = "可直接提问";
   }
   if (elements.visitorServiceBoundary) {
-    elements.visitorServiceBoundary.textContent = config.service_boundary || "知识库生成";
+    elements.visitorServiceBoundary.textContent = "围绕景区服务";
   }
 
   if (elements.configScenicArea) {
@@ -919,7 +923,7 @@ function renderDigitalVideoStatus(status) {
   elements.videoProviderFallbacks.textContent = status.fallback_count ?? 0;
   elements.videoProviderFailure.textContent = status.last_failure_reason || status.last_message || "无";
   if (elements.visitorVideoStatus) {
-    elements.visitorVideoStatus.textContent = status.enabled ? "外部视频优先" : "当前回退音频";
+    elements.visitorVideoStatus.textContent = status.enabled ? "可播放讲解" : "语音讲解可用";
   }
 }
 
@@ -940,7 +944,18 @@ function renderAiStatus(status) {
   elements.aiMainModelStatus.textContent = status.main_model_configured ? "已配置" : "未配置";
   elements.aiMainModelName.textContent = status.main_model_name || "-";
   elements.aiRagStatus.textContent = status.rag_enabled ? (status.rag_configured ? "向量检索" : "关键词降级") : "关闭";
+  if (elements.aiVisionStatus) {
+    elements.aiVisionStatus.textContent = status.vision_enabled
+      ? (status.vision_configured ? `${status.vision_model_name || "视觉模型"} 已配置` : "缺少视觉 Key")
+      : "关闭";
+  }
   elements.aiTtsStatus.textContent = status.tts_enabled ? "中文语音开启" : "中文语音关闭";
+  if (elements.aiServerTtsStatus) {
+    const lastProvider = status.server_tts_last_provider || status.server_tts_provider || "-";
+    const localLabel = status.local_tts_enabled ? "本地优先" : "本地未启用";
+    const readyLabel = status.server_tts_ready ? "可用" : "待生成";
+    elements.aiServerTtsStatus.textContent = `${lastProvider} / ${localLabel} / ${readyLabel}`;
+  }
   elements.aiEnglishStatus.textContent = status.english_available
     ? (status.english_tts_enabled ? "英文文本+语音" : "英文文本")
     : "未配置";
@@ -1001,14 +1016,23 @@ async function runEvaluation() {
 }
 
 function setApiStatus(text, type) {
+  if (!elements.apiStatus) {
+    return;
+  }
   elements.apiStatus.textContent = text;
-  elements.apiStatus.className = `status-pill ${type}`;
+  elements.apiStatus.className = `status-pill api-status-floating ${type}`;
+  elements.apiStatus.title = text;
+  elements.apiStatus.setAttribute("aria-label", text);
 }
 
 function configureRuntimeLinks() {
   if (elements.docsLink && API_BASE_URL) {
     elements.docsLink.href = buildApiUrl("/docs");
   }
+}
+
+function syncAdminOnlyChrome(viewId = "visitorView") {
+  document.body.classList.toggle("is-admin-view", viewId === "adminView");
 }
 
 function addMessage(type, html, extraClass = "", logId = "") {
@@ -1021,6 +1045,15 @@ function addMessage(type, html, extraClass = "", logId = "") {
   elements.chatMessages.appendChild(node);
   elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
   return node;
+}
+
+function setChatComposerBusy(isBusy) {
+  if (!elements.chatSubmitButton) {
+    return;
+  }
+  elements.chatSubmitButton.disabled = isBusy;
+  elements.chatSubmitButton.classList.toggle("is-loading", isBusy);
+  elements.chatSubmitButton.textContent = isBusy ? "发送中" : "发送";
 }
 
 function renderRouteCard(data) {
@@ -1088,23 +1121,28 @@ function renderFeedbackActions(logId) {
   if (!logId) {
     return "";
   }
-  const stars = [1, 2, 3, 4, 5]
+  const options = [
+    { rating: 5, label: "有帮助" },
+    { rating: 2, label: "不准确" },
+    { rating: 1, label: "答非所问" },
+  ];
+  const buttons = options
     .map(
-      (rating) => `
+      (item) => `
         <button
-          class="rating-button rating-star"
+          class="feedback-chip"
           type="button"
-          data-rating="${rating}"
+          data-rating="${item.rating}"
           data-log-id="${logId}"
-          aria-label="${rating} 星满意度"
-          title="${rating} 星"
-        >★</button>
+          aria-label="${item.label}"
+        >${item.label}</button>
       `
     )
     .join("");
   return `
-    <div class="message-actions feedback-actions" aria-label="满意度反馈">
-      ${stars}
+    <div class="feedback-actions" aria-label="满意度反馈">
+      <span>本次回答是否有帮助？</span>
+      ${buttons}
     </div>
   `;
 }
@@ -1117,7 +1155,7 @@ function renderTranslationBlock(data, targetLanguage = "en") {
   }
   const label = targetLanguage === "en" ? "English Answer" : targetLanguage;
   const audioButton = audioUrl
-    ? `<button class="small-action translation-audio-action" type="button" data-audio-url="${escapeHtml(audioUrl)}">播放英文</button>`
+    ? `<button class="small-action translation-audio-action" type="button" data-audio-url="${escapeHtml(audioUrl)}">英文语音</button>`
     : "";
   return `
     <div class="translation-card" data-translation-language="${escapeHtml(targetLanguage)}">
@@ -1133,10 +1171,10 @@ function renderTranslationBlock(data, targetLanguage = "en") {
 function renderAudioAction(data) {
   const status = data.audio_status || (data.audio_url ? "ready" : "pending");
   if (data.tts_mode_used === "browser_local" && status === "not_requested") {
-    return `<button class="small-action" type="button" data-local-tts-log-id="${data.log_id}">播放回答</button>`;
+    return `<button class="small-action" type="button" data-local-tts-log-id="${data.log_id}">语音播放</button>`;
   }
   if (status === "ready" && data.audio_url) {
-    return `<button class="small-action" type="button" data-audio-url="${escapeHtml(data.audio_url)}">播放回答</button>`;
+    return `<button class="small-action" type="button" data-audio-url="${escapeHtml(data.audio_url)}">语音播放</button>`;
   }
   if (status === "failed") {
     return `<button class="small-action is-disabled" type="button" disabled title="语音生成失败">语音失败</button>`;
@@ -1150,12 +1188,8 @@ function updateAnswerAudioUi(logId, data) {
     return;
   }
   const actionSlot = messageNode.querySelector(`[data-audio-action-slot="${logId}"]`);
-  const lipTag = messageNode.querySelector(`[data-lipsync-tag="${logId}"]`);
   if (actionSlot) {
     actionSlot.innerHTML = renderAudioAction(data);
-  }
-  if (lipTag) {
-    lipTag.classList.toggle("hidden", !data.lipsync_available);
   }
   if (state.answerPayloads[logId]) {
     state.answerPayloads[logId] = { ...state.answerPayloads[logId], ...data };
@@ -1268,9 +1302,8 @@ function renderAnswer(data, options = {}) {
   state.answerPayloads[data.log_id] = data;
   const transcriptBlock = options.showTranscript
     ? `
-      <div class="message-meta">
-        <span class="tag">识别：${escapeHtml(data.transcript || "-")}</span>
-        <span class="tag">理解：${escapeHtml(data.interpreted_question || "-")}</span>
+      <div class="visitor-question-note">
+        <span>你刚才问：${escapeHtml(data.interpreted_question || data.transcript || "-")}</span>
       </div>
     `
     : "";
@@ -1284,34 +1317,30 @@ function renderAnswer(data, options = {}) {
         data-translate-language="en"
         data-translate-source="${escapeHtml(data.answer)}"
         ${translateDisabled ? 'disabled title="英文回答服务未配置"' : ""}
-      >English</button>
+      >英文翻译</button>
     `;
   const videoReady = data.video_url && data.video_status === "ready";
   const videoButton = videoReady
     ? `<button class="small-action" type="button" data-video-url="${escapeHtml(data.video_url)}" data-fallback-audio-url="${escapeHtml(data.audio_url || "")}">播放数字人视频</button>`
     : "";
-  const videoTag = data.video_status && data.video_status !== "disabled"
-    ? `<span class="tag">视频：${escapeHtml(data.video_status)}</span>`
+  const visionBlock = data.multimodal_source
+    ? `
+      <div class="vision-evidence">
+        <span>多模态识别</span>
+        <strong>${escapeHtml(data.vision_model_name || "视觉模型")}</strong>
+        <em>${escapeHtml(data.matched_spot || "未匹配明确景点")}</em>
+      </div>
+      <div class="vision-summary">${escapeHtml(data.vision_summary || "")}</div>
+    `
     : "";
-  const sourceTag = data.answer_source ? `<span class="tag">来源：${escapeHtml(data.answer_source)}</span>` : "";
-  const modelTag = data.model_name ? `<span class="tag">模型：${escapeHtml(data.model_name)}</span>` : "";
-  const lipTag = `<span class="tag${data.lipsync_available || data.tts_mode_used === "browser_local" ? "" : " hidden"}" data-lipsync-tag="${data.log_id}">口型同步</span>`;
 
   addMessage(
     "assistant",
     `
       <strong>数字人回答</strong>
-      <div>${escapeHtml(data.answer)}</div>
+      ${visionBlock}
+      <div class="answer-text">${escapeHtml(data.answer)}</div>
       ${transcriptBlock}
-      ${renderReferenceTags(data.reference)}
-      <div class="message-meta">
-        <span class="tag">${escapeHtml(data.emotion || "neutral")}</span>
-        <span class="tag">${Number(data.response_seconds || 0).toFixed(2)} 秒</span>
-        ${sourceTag}
-        ${modelTag}
-        ${lipTag}
-        ${videoTag}
-      </div>
       <div class="message-actions">
         ${videoButton}
         <span data-audio-action-slot="${data.log_id}">${audioButton}</span>
@@ -1347,6 +1376,7 @@ async function askText(question) {
   addMessage("user", escapeHtml(trimmed));
   const loading = addMessage("assistant", "正在检索景区知识库，请稍候...", "loading");
   elements.questionInput.value = "";
+  setChatComposerBusy(true);
   setGuideState("正在思考", "正在从景区知识库中查找最相关的信息。");
   setPetSpeech("检索知识库");
   setPetMode("thinking");
@@ -1365,6 +1395,8 @@ async function askText(question) {
     setPetSpeech("需要重试");
     setPetMode(null);
     showToast(error.message, "error");
+  } finally {
+    setChatComposerBusy(false);
   }
 }
 
@@ -1373,6 +1405,7 @@ async function askRouteLecture(question) {
   addMessage("user", escapeHtml(trimmed));
   const loading = addMessage("assistant", "正在生成适合初次游客的路线讲解...", "loading");
   elements.questionInput.value = "";
+  setChatComposerBusy(true);
   setGuideState("正在规划路线", "系统正在匹配当前景区的预设路线。");
   setPetSpeech("路线规划中");
   setPetMode("thinking");
@@ -1405,6 +1438,8 @@ async function askRouteLecture(question) {
     setPetSpeech("需要重试");
     setPetMode(null);
     showToast(error.message, "error");
+  } finally {
+    setChatComposerBusy(false);
   }
 }
 
@@ -1437,10 +1472,62 @@ async function sendVoice(blob, filename = "visitor-question.webm") {
   }
 }
 
+async function sendImage(file) {
+  if (!file) {
+    return;
+  }
+  if (!/^image\//i.test(file.type || "")) {
+    showToast("请上传图片文件。", "error");
+    return;
+  }
+  const question = elements.questionInput.value.trim();
+  const formData = new FormData();
+  formData.append("user_id", "web-visitor");
+  formData.append("tts_mode", preferredTtsMode());
+  formData.append("question", question);
+  formData.append("file", file, file.name || "visitor-image.png");
+
+  const previewUrl = URL.createObjectURL(file);
+  addMessage(
+    "user",
+    `
+      <div class="image-question-preview">
+        <img src="${escapeHtml(previewUrl)}" alt="上传的景区图片预览" />
+        <span>${escapeHtml(question || "请识别这张图片并讲解。")}</span>
+      </div>
+    `
+  );
+  const loading = addMessage("assistant", "正在调用多模态大模型识别图片，并匹配景区知识库...", "loading");
+  elements.questionInput.value = "";
+  setChatComposerBusy(true);
+  setGuideState("正在识别图片", "多模态视觉模型正在观察图片，并准备接入 RAG 导览。");
+  setPetSpeech("图片识别中");
+  setPetMode("thinking");
+
+  try {
+    const data = await apiFetch("/api/chat/image", {
+      method: "POST",
+      body: formData,
+    });
+    loading.remove();
+    renderAnswer(data, { showTranscript: true });
+    loadAdminData({ silent: true });
+  } catch (error) {
+    loading.remove();
+    setGuideState("图片识别失败", "可以换一张更清晰的景点照片，或检查多模态模型配置。");
+    setPetSpeech("图片没看清");
+    setPetMode(null);
+    showToast(error.message, "error");
+  } finally {
+    setChatComposerBusy(false);
+    window.setTimeout(() => URL.revokeObjectURL(previewUrl), 4000);
+  }
+}
+
 async function toggleRecording() {
   if (state.recorder?.state === "recording") {
     state.recorder.stop();
-    elements.recordButton.textContent = "开始录音";
+    elements.recordButton.textContent = "语音";
     elements.voiceHint.textContent = "录音已结束，正在上传...";
     return;
   }
@@ -1467,7 +1554,7 @@ async function toggleRecording() {
       sendVoice(blob);
     });
     state.recorder.start();
-    elements.recordButton.textContent = "停止录音";
+    elements.recordButton.textContent = "停止";
     elements.voiceHint.textContent = "正在录音";
   } catch (error) {
     showToast(`无法打开麦克风：${error.message}`, "error");
@@ -1643,12 +1730,12 @@ async function submitFeedback(logId, satisfaction, button) {
       body: JSON.stringify({ log_id: Number(logId), satisfaction: Number(satisfaction) }),
     });
     button.closest(".feedback-actions").querySelectorAll("button").forEach((item) => {
-      const isSelected = Number(item.dataset.rating) <= Number(satisfaction);
+      const isSelected = Number(item.dataset.rating) === Number(satisfaction);
       item.classList.toggle("selected", isSelected);
       item.classList.toggle("muted", !isSelected);
       item.disabled = true;
     });
-    showToast(`已提交 ${satisfaction} 星反馈。`);
+    showToast("感谢反馈，已记录。");
     loadAdminData({ silent: true });
   } catch (error) {
     showToast(error.message, "error");
@@ -1670,7 +1757,7 @@ async function toggleTranslation(button) {
   if (expanded) {
     slot.innerHTML = "";
     button.dataset.expanded = "false";
-    button.textContent = targetLanguage === "en" ? "English" : targetLanguage;
+    button.textContent = targetLanguage === "en" ? "英文翻译" : targetLanguage;
     return;
   }
 
@@ -2317,6 +2404,7 @@ function bindEvents() {
       $$(".view").forEach((view) => view.classList.remove("active"));
       button.classList.add("active");
       $(`#${button.dataset.view}`).classList.add("active");
+      syncAdminOnlyChrome(button.dataset.view);
       if (button.dataset.view === "adminView" && state.adminToken) {
         elements.loginPanel.classList.add("hidden");
         elements.adminWorkspace.classList.remove("hidden");
@@ -2353,6 +2441,14 @@ function bindEvents() {
     if (file) {
       sendVoice(file, file.name);
       elements.voiceFileInput.value = "";
+    }
+  });
+
+  elements.imageFileInput?.addEventListener("change", () => {
+    const file = elements.imageFileInput.files?.[0];
+    if (file) {
+      sendImage(file);
+      elements.imageFileInput.value = "";
     }
   });
 
@@ -2478,6 +2574,7 @@ function bindEvents() {
 
 async function boot() {
   configureRuntimeLinks();
+  syncAdminOnlyChrome();
   bindEvents();
   bindLicensedAvatarAsset();
   applyGuideMode(state.guideMode);
@@ -2495,7 +2592,6 @@ async function boot() {
     `
       <strong>你好，我是景区导览数字人。</strong>
       <div>${escapeHtml(config.greeting)}</div>
-      ${renderReferenceTags([config.scenic_area, "九龙灌浴", "灵山大佛"])}
     `
   );
   recommendRoute();

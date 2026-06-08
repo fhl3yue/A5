@@ -7,12 +7,15 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
+.venv_tts/
+local_tts/
 
 # Local config
 .env
 
 # Generated runtime data
 data/generated/
+data/*.db
 build/
 dist/
 .playwright-cli/

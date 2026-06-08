@@ -2,6 +2,7 @@ from pathlib import Path
 import shutil
 from uuid import uuid4
 
+import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
@@ -66,6 +67,7 @@ from app.services.knowledge import import_docx_document, import_plain_text_docum
 from app.services.rag import rag_status, rebuild_embeddings
 from app.services.routes import recommend_route
 from app.services.speech import transcribe_audio_file
+from app.services.vision import VisionGuideError, answer_image_question, validate_image_upload
 from app.utils import refine_voice_question, to_simplified_chinese
 
 
@@ -282,6 +284,77 @@ def chat_voice(
             emotion=result["emotion"],
             reference=result["reference"],
             response_seconds=result["response_seconds"],
+        )
+    )
+
+
+@app.post("/api/chat/image", response_model=ChatResponse)
+def chat_image(
+    question: str = Form(default=""),
+    user_id: str = Form(default="guest"),
+    tts_mode: str = Form(default="auto"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    if tts_mode not in {"auto", "local_preferred", "server_only"}:
+        tts_mode = "auto"
+    image_bytes = file.file.read()
+    try:
+        mime_type = validate_image_upload(file.filename, file.content_type, image_bytes)
+    except VisionGuideError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        result = answer_image_question(
+            db,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            question=question.strip(),
+            user_id=user_id,
+            tts_mode=tts_mode,
+        )
+    except VisionGuideError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except httpx.InvalidURL as exc:
+        raise HTTPException(status_code=502, detail=f"多模态视觉模型连接配置异常：{exc}") from exc
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        if status_code == 404:
+            detail = "多模态视觉模型调用失败：当前中转未找到 GLM-4.5V 模型。"
+        elif status_code == 400:
+            detail = "多模态视觉模型调用失败：当前中转不接受本次图片请求参数。"
+        else:
+            detail = f"多模态视觉模型调用失败：{status_code}"
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"多模态视觉模型连接失败：{exc}") from exc
+
+    interpreted_question = (
+        f"图片识别：{result.get('matched_spot') or '未识别到明确景点'}。"
+        f"{question.strip() or '请介绍图片中的景点'}"
+    )
+    return ChatResponse(
+        data=ChatData(
+            log_id=result["log_id"],
+            transcript=question.strip() or "图片识别导览",
+            interpreted_question=interpreted_question,
+            answer=result["answer"],
+            audio_url=result["audio_url"],
+            audio_status=result["audio_status"],
+            english_available=result["english_available"],
+            answer_source=result["answer_source"],
+            model_name=result["model_name"],
+            lipsync_available=result["lipsync_available"],
+            tts_mode_used=result["tts_mode_used"],
+            video_url=result["video_url"],
+            video_status=result["video_status"],
+            emotion=result["emotion"],
+            reference=result["reference"],
+            response_seconds=result["response_seconds"],
+            vision_summary=result["vision_summary"],
+            matched_spot=result["matched_spot"],
+            vision_model_name=result["vision_model_name"],
+            multimodal_source=result["multimodal_source"],
         )
     )
 
