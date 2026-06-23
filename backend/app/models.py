@@ -114,4 +114,8 @@ class QALog(Base):
     audio_url: Mapped[str] = mapped_column(String(500), default="")
     audio_status: Mapped[str] = mapped_column(String(20), default="pending")
     audio_ready_seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    video_url: Mapped[str] = mapped_column(String(500), default="")
+    video_status: Mapped[str] = mapped_column(String(30), default="disabled")
+    video_message: Mapped[str] = mapped_column(String(255), default="")
+    video_ready_seconds: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

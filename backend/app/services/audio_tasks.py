@@ -1,3 +1,4 @@
+import re
 import threading
 import time
 
@@ -7,6 +8,62 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import QALog
 from app.services.audio import generate_tts_audio
+from app.services.digital_video import generate_digital_video
+from app.services.lipsync import generate_lipsync_for_audio
+
+
+SPOKEN_TEXT_MIN_CHARS = 80
+SPOKEN_TEXT_MAX_CHARS = 120
+_SPOKEN_METADATA_HINTS = (
+    "参考来源",
+    "引用来源",
+    "来源：",
+    "来源:",
+    "RAG",
+    "answer_source",
+    "model_name",
+)
+
+
+def build_spoken_answer_text(answer: str) -> str:
+    """Build a short, natural narration text for server-side TTS."""
+    text = re.sub(r"<[^>]+>", "", answer or "")
+    lines = []
+    for raw_line in text.replace("\r", "\n").split("\n"):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if any(hint in line for hint in _SPOKEN_METADATA_HINTS):
+            continue
+        line = re.sub(r"^\s*(?:[-*•]+|\d+[.、])\s*", "", line)
+        lines.append(line)
+
+    text = re.sub(r"\s+", " ", " ".join(lines)).strip()
+    if not text:
+        return ""
+    if len(text) <= SPOKEN_TEXT_MAX_CHARS:
+        return text
+
+    sentences = [item.strip() for item in re.split(r"(?<=[。！？!?；;])", text) if item.strip()]
+    selected = ""
+    for sentence in sentences:
+        candidate = f"{selected}{sentence}" if selected else sentence
+        if len(candidate) > SPOKEN_TEXT_MAX_CHARS:
+            break
+        selected = candidate
+        if len(selected) >= SPOKEN_TEXT_MIN_CHARS:
+            break
+
+    if not selected:
+        selected = text[:SPOKEN_TEXT_MAX_CHARS]
+        cut_at = max(selected.rfind(mark) for mark in ("，", "、", "；", "。", ",", ";"))
+        if cut_at >= SPOKEN_TEXT_MIN_CHARS:
+            selected = selected[: cut_at + 1]
+
+    selected = selected.strip(" ，,；;、")
+    if selected and selected[-1] not in "。！？!?":
+        selected = f"{selected}。"
+    return selected
 
 
 def queue_answer_audio(log_id: int, text: str, voice_name: str | None = None) -> None:
@@ -26,12 +83,23 @@ def get_audio_status(log_id: int) -> dict | None:
         if log is None:
             return None
         audio_url = log.audio_url.strip() or None
+        lipsync = generate_lipsync_for_audio(audio_url) if audio_url else {
+            "lipsync_url": None,
+            "lipsync_provider": "",
+            "mouth_cue_count": 0,
+        }
         return {
             "log_id": log.id,
             "audio_status": (log.audio_status or "pending").strip() or "pending",
             "audio_url": audio_url,
-            "lipsync_available": bool(audio_url),
+            "lipsync_available": bool(lipsync.get("lipsync_url")) or bool(audio_url),
+            "lipsync_url": lipsync.get("lipsync_url"),
+            "lipsync_provider": lipsync.get("lipsync_provider", ""),
+            "mouth_cue_count": lipsync.get("mouth_cue_count", 0),
             "tts_mode_used": "server_async" if audio_url or log.audio_status != "not_requested" else "browser_local",
+            "video_url": log.video_url.strip() or None,
+            "video_status": (log.video_status or "disabled").strip() or "disabled",
+            "video_message": log.video_message or "",
         }
     finally:
         db.close()
@@ -49,22 +117,36 @@ def request_answer_audio(db: Session, log_id: int, voice_name: str | None = None
     elif audio_status != "pending":
         log.audio_status = "pending"
         log.audio_ready_seconds = 0.0
+        log.video_status = "waiting_audio"
+        log.video_message = ""
         db.commit()
         queue_answer_audio(log.id, log.answer, voice_name)
         audio_status = "pending"
 
+    lipsync = generate_lipsync_for_audio(audio_url) if audio_url else {
+        "lipsync_url": None,
+        "lipsync_provider": "",
+        "mouth_cue_count": 0,
+    }
     return {
         "log_id": log.id,
         "audio_status": audio_status,
         "audio_url": audio_url,
-        "lipsync_available": bool(audio_url),
+        "lipsync_available": bool(lipsync.get("lipsync_url")) or bool(audio_url),
+        "lipsync_url": lipsync.get("lipsync_url"),
+        "lipsync_provider": lipsync.get("lipsync_provider", ""),
+        "mouth_cue_count": lipsync.get("mouth_cue_count", 0),
         "tts_mode_used": "server_async",
+        "video_url": log.video_url.strip() or None,
+        "video_status": (log.video_status or "disabled").strip() or "disabled",
+        "video_message": log.video_message or "",
     }
 
 
 def _build_answer_audio(log_id: int, text: str, voice_name: str | None = None) -> None:
     started = time.perf_counter()
-    audio_url = generate_tts_audio(text, voice_name)
+    spoken_text = build_spoken_answer_text(text)
+    audio_url = generate_tts_audio(spoken_text, voice_name) if spoken_text else None
     elapsed = round(time.perf_counter() - started, 3)
 
     db = SessionLocal()
@@ -75,6 +157,39 @@ def _build_answer_audio(log_id: int, text: str, voice_name: str | None = None) -
         log.audio_url = audio_url or ""
         log.audio_status = "ready" if audio_url else "failed"
         log.audio_ready_seconds = elapsed
+        db.commit()
+        if audio_url:
+            generate_lipsync_for_audio(audio_url)
+            _build_answer_video(log.id, log.answer, audio_url)
+    finally:
+        db.close()
+
+
+def _build_answer_video(log_id: int, text: str, audio_url: str) -> None:
+    started = time.perf_counter()
+    db = SessionLocal()
+    try:
+        log = db.execute(select(QALog).where(QALog.id == log_id)).scalar_one_or_none()
+        if log is None:
+            return
+        log.video_status = "pending"
+        log.video_message = "avatar-only rendering"
+        db.commit()
+    finally:
+        db.close()
+
+    result = generate_digital_video(text, audio_url)
+    elapsed = round(time.perf_counter() - started, 3)
+
+    db = SessionLocal()
+    try:
+        log = db.execute(select(QALog).where(QALog.id == log_id)).scalar_one_or_none()
+        if log is None:
+            return
+        log.video_url = result.video_url or ""
+        log.video_status = result.video_status or "disabled"
+        log.video_message = result.message[:255] if result.message else ""
+        log.video_ready_seconds = elapsed
         db.commit()
     finally:
         db.close()

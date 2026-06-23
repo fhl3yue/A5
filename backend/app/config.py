@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     tts_voice: str = "zh-CN-XiaoxiaoNeural"
     tts_max_chars: int = 520
     server_tts_provider: str = "auto"
+    edge_tts_cache_enabled: bool = True
+    edge_tts_cache_max_items: int = 300
+    edge_tts_cache_version: str = "v1"
+    enable_rhubarb_lipsync: bool = False
+    rhubarb_bin_path: str = "tools/rhubarb/rhubarb.exe"
+    lipsync_cache_enabled: bool = True
+    lipsync_timeout_seconds: float = 12.0
     local_tts_enabled: bool = False
     local_tts_provider: str = "moss_onnx"
     local_tts_base_url: str = "http://127.0.0.1:18083"
@@ -72,6 +79,15 @@ class Settings(BaseSettings):
     digital_video_api_key: str = ""
     digital_video_avatar_id: str = "default"
     digital_video_timeout_seconds: int = 8
+    avatar_only_enabled: bool = False
+    avatar_only_base_url: str = "http://127.0.0.1:18085"
+    avatar_only_timeout_seconds: float = 45.0
+    openavatar_enabled: bool = False
+    openavatar_base_url: str = "http://127.0.0.1:8282"
+    openavatar_ui_url: str = "http://127.0.0.1:8282/ui/index.html"
+    openavatar_mode: str = "disabled"
+    openavatar_profile: str = "Legacy full OpenAvatarChat iframe"
+    openavatar_timeout_seconds: float = 2.0
     enable_asr: bool = True
     asr_model_size: str = "base"
     asr_device: str = "cpu"
@@ -85,6 +101,7 @@ class Settings(BaseSettings):
     generated_data_dir: Path = Field(default=BASE_DIR / "data" / "generated")
     sample_data_dir: Path = Field(default=BASE_DIR / "data" / "sample")
     audio_output_dir: Path = Field(default=BASE_DIR / "data" / "generated" / "audio")
+    lipsync_output_dir: Path = Field(default=BASE_DIR / "data" / "generated" / "lipsync")
     avatar_output_dir: Path = Field(default=BASE_DIR / "data" / "generated" / "avatar")
     upload_temp_dir: Path = Field(default=BASE_DIR / "data" / "generated" / "uploads")
 
@@ -103,6 +120,7 @@ def ensure_runtime_dirs() -> None:
         settings.generated_data_dir,
         settings.sample_data_dir,
         settings.audio_output_dir,
+        settings.lipsync_output_dir,
         settings.avatar_output_dir,
         settings.upload_temp_dir,
     ):

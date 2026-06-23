@@ -5,7 +5,7 @@ from uuid import uuid4
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.orm import Session
@@ -89,6 +89,10 @@ def ensure_runtime_schema() -> None:
         "audio_url": "VARCHAR(500) DEFAULT ''",
         "audio_status": "VARCHAR(20) DEFAULT 'pending'",
         "audio_ready_seconds": "FLOAT DEFAULT 0.0",
+        "video_url": "VARCHAR(500) DEFAULT ''",
+        "video_status": "VARCHAR(30) DEFAULT 'disabled'",
+        "video_message": "VARCHAR(255) DEFAULT ''",
+        "video_ready_seconds": "FLOAT DEFAULT 0.0",
     }
     with engine.begin() as connection:
         rows = connection.exec_driver_sql("PRAGMA table_info(digital_human_configs)").fetchall()
@@ -114,6 +118,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/generated/audio", StaticFiles(directory=settings.audio_output_dir), name="generated-audio")
+app.mount("/generated/lipsync", StaticFiles(directory=settings.lipsync_output_dir), name="generated-lipsync")
 app.mount("/generated/avatar", StaticFiles(directory=settings.avatar_output_dir), name="generated-avatar")
 frontend_dir = BASE_DIR / "frontend"
 if frontend_dir.exists():
@@ -374,6 +379,45 @@ def chat_audio_request(log_id: int, db: Session = Depends(get_db)):
     if status is None:
         raise HTTPException(status_code=404, detail="鏈壘鍒板搴旈棶绛旇褰曘€?")
     return AudioStatusResponse(data=AudioStatusData(**status))
+
+
+def _chat_video_response(log_id: int, db: Session, head_only: bool = False):
+    log = db.get(QALog, log_id)
+    if log is None:
+        raise HTTPException(status_code=404, detail="未找到对应问答记录。")
+    video_url = (log.video_url or "").strip()
+    if not video_url.startswith("/generated/avatar/"):
+        raise HTTPException(status_code=404, detail="该问答还没有可播放的数字人视频。")
+    filename = Path(video_url).name
+    path = (settings.avatar_output_dir / filename).resolve()
+    try:
+        path.relative_to(settings.avatar_output_dir.resolve())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="数字人视频路径非法。") from exc
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail="数字人视频文件不存在。")
+    headers = {
+        "Cache-Control": "public, max-age=3600",
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": "inline",
+    }
+    if head_only:
+        return Response(media_type="video/mp4", headers=headers)
+    return FileResponse(
+        path,
+        media_type="video/mp4",
+        headers=headers,
+    )
+
+
+@app.get("/api/chat/video/{log_id}")
+def chat_video_file(log_id: int, db: Session = Depends(get_db)):
+    return _chat_video_response(log_id, db)
+
+
+@app.head("/api/chat/video/{log_id}")
+def chat_video_head(log_id: int, db: Session = Depends(get_db)):
+    return _chat_video_response(log_id, db, head_only=True)
 
 
 @app.post("/api/recommend/route", response_model=RouteResponse)

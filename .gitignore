@@ -9,6 +9,7 @@ __pycache__/
 venv/
 .venv_tts/
 local_tts/
+tools/rhubarb/
 
 # Local config
 .env

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>灵山胜境 AI 数字人导览</title>
-    <link rel="stylesheet" href="./styles.css?v=20260601-vision-guide" />
+    <link rel="stylesheet" href="./styles.css?v=20260615-openavatar-fusion" />
   </head>
   <body>
     <div class="app-shell">
@@ -40,6 +40,92 @@
               <div class="avatar-frame pet-frame" id="avatarFrame">
                 <div class="pet-orbit"></div>
                 <div class="pet-speech" id="petSpeech">景区导览中</div>
+                <svg class="bio-face-rig" viewBox="0 0 420 540" role="img" aria-label="仿生 2D 面部关键点数字人导览员">
+                  <defs>
+                    <linearGradient id="bioSkin" x1="164" x2="258" y1="92" y2="250" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#fff6eb" />
+                      <stop offset="1" stop-color="#f1c4a8" />
+                    </linearGradient>
+                    <linearGradient id="bioHair" x1="108" x2="306" y1="42" y2="246" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#243745" />
+                      <stop offset="0.48" stop-color="#385b66" />
+                      <stop offset="1" stop-color="#142830" />
+                    </linearGradient>
+                    <linearGradient id="bioSuit" x1="126" x2="294" y1="278" y2="500" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#f8fbf5" />
+                      <stop offset="0.52" stop-color="#d8f0e6" />
+                      <stop offset="1" stop-color="#8cb9ad" />
+                    </linearGradient>
+                    <linearGradient id="bioJade" x1="130" x2="290" y1="310" y2="440" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#1a9e80" />
+                      <stop offset="1" stop-color="#0d655b" />
+                    </linearGradient>
+                    <filter id="bioSoftShadow" x="-30%" y="-30%" width="160%" height="180%">
+                      <feDropShadow dx="0" dy="24" stdDeviation="18" flood-color="#174c48" flood-opacity="0.22" />
+                    </filter>
+                  </defs>
+                  <ellipse class="bio-ground" cx="210" cy="500" rx="116" ry="20" fill="#2a776c" opacity="0.16" />
+                  <g class="bio-root" filter="url(#bioSoftShadow)">
+                    <path class="bio-shoulder" d="M106 484 C123 379 156 319 210 319 C264 319 298 379 314 484 Z" fill="url(#bioSuit)" />
+                    <path class="bio-lapel bio-lapel-left" d="M161 326 L210 434 L125 482 C130 408 141 360 161 326 Z" fill="#ffffff" opacity="0.86" />
+                    <path class="bio-lapel bio-lapel-right" d="M259 326 L210 434 L295 482 C290 408 279 360 259 326 Z" fill="#eef7f0" opacity="0.9" />
+                    <path class="bio-scarf" d="M162 340 C188 359 232 359 259 340 L274 393 C246 421 176 421 146 393 Z" fill="url(#bioJade)" />
+                    <rect class="bio-badge" x="246" y="404" width="62" height="40" rx="13" fill="#e8b64f" />
+                    <text x="277" y="429" fill="#173047" font-size="16" font-weight="900" text-anchor="middle">GUIDE</text>
+
+                    <g class="bio-neck">
+                      <path d="M184 246 H236 V334 C222 349 198 349 184 334 Z" fill="#eab99b" />
+                    </g>
+                    <g class="bio-head">
+                      <path class="bio-hair-back" d="M110 158 C112 82 153 40 213 40 C283 43 318 92 314 165 C310 239 269 284 210 284 C150 284 113 236 110 158 Z" fill="url(#bioHair)" />
+                      <path class="bio-face-shape" d="M127 151 C128 92 161 60 210 59 C259 60 292 93 293 151 C295 224 262 269 210 270 C158 269 125 224 127 151 Z" fill="url(#bioSkin)" />
+                      <path class="bio-face-shadow" d="M250 73 C279 102 288 151 276 202 C266 241 244 262 210 270 C260 268 295 224 293 151 C292 105 273 78 250 73 Z" fill="#d99a82" opacity="0.16" />
+                      <path class="bio-hair-fringe" d="M119 145 C135 73 184 48 240 62 C220 92 181 118 119 145 Z" fill="url(#bioHair)" />
+                      <path class="bio-hair-fringe bio-hair-fringe-right" d="M225 61 C273 73 303 111 296 158 C266 142 242 111 225 61 Z" fill="#1b343d" />
+                      <ellipse class="bio-ear bio-ear-left" cx="126" cy="168" rx="15" ry="25" fill="#eab99b" />
+                      <ellipse class="bio-ear bio-ear-right" cx="294" cy="168" rx="15" ry="25" fill="#dca88f" />
+
+                      <g class="bio-face-points" aria-hidden="true">
+                        <circle cx="160" cy="145" r="3" />
+                        <circle cx="185" cy="142" r="3" />
+                        <circle cx="235" cy="142" r="3" />
+                        <circle cx="260" cy="145" r="3" />
+                        <circle cx="210" cy="178" r="3" />
+                        <circle cx="185" cy="218" r="3" />
+                        <circle cx="210" cy="224" r="3" />
+                        <circle cx="235" cy="218" r="3" />
+                      </g>
+
+                      <g class="bio-brows">
+                        <path class="bio-brow bio-brow-left" d="M150 135 C166 126 184 126 199 134" />
+                        <path class="bio-brow bio-brow-right" d="M221 134 C238 126 256 126 271 135" />
+                      </g>
+                      <g class="bio-eyes">
+                        <g class="bio-eye bio-eye-left">
+                          <ellipse cx="177" cy="158" rx="24" ry="13" fill="#fff8ef" />
+                          <circle class="bio-iris" cx="179" cy="159" r="9" fill="#2c5962" />
+                          <circle cx="176" cy="155" r="3" fill="#fff" />
+                        </g>
+                        <g class="bio-eye bio-eye-right">
+                          <ellipse cx="243" cy="158" rx="24" ry="13" fill="#fff8ef" />
+                          <circle class="bio-iris" cx="241" cy="159" r="9" fill="#2c5962" />
+                          <circle cx="238" cy="155" r="3" fill="#fff" />
+                        </g>
+                      </g>
+                      <path class="bio-nose" d="M211 164 C204 184 204 197 216 200" fill="none" stroke="#c88774" stroke-width="4" stroke-linecap="round" opacity="0.56" />
+                      <ellipse class="bio-cheek bio-cheek-left" cx="158" cy="196" rx="23" ry="10" fill="#df7f80" opacity="0.22" />
+                      <ellipse class="bio-cheek bio-cheek-right" cx="262" cy="196" rx="23" ry="10" fill="#df7f80" opacity="0.2" />
+                      <g class="bio-mouth-rig">
+                        <path class="bio-mouth-shadow" d="M181 222 C197 244 225 244 241 222 C228 233 195 233 181 222 Z" fill="#6b2b32" opacity="0.12" />
+                        <path class="bio-mouth bio-mouth-x" d="M188 218 C202 225 219 225 233 218" />
+                        <path class="bio-mouth bio-mouth-a" d="M184 216 C198 248 224 248 238 216 C224 230 198 230 184 216 Z" />
+                        <path class="bio-mouth bio-mouth-o" d="M195 215 C203 204 217 204 225 215 C232 227 223 240 210 240 C197 240 188 227 195 215 Z" />
+                        <path class="bio-mouth bio-mouth-e" d="M184 218 C199 229 223 229 238 218 C225 225 197 225 184 218 Z" />
+                        <path class="bio-mouth bio-mouth-f" d="M187 216 C202 222 220 222 235 216 M194 223 C206 230 221 230 232 223" />
+                      </g>
+                    </g>
+                  </g>
+                </svg>
                 <svg class="pet-character ling-character live2d-character" viewBox="0 0 420 540" role="img" aria-label="灵灵，Live2D 风格景区 AI 导览员">
                   <defs>
                     <linearGradient id="idolSkinGradient" x1="150" x2="255" y1="92" y2="230" gradientUnits="userSpaceOnUse">
@@ -191,6 +277,43 @@
                 </div>
                 <div class="digital-video-layer" id="digitalVideoLayer" aria-live="polite">
                   <video id="digitalVideoPlayer" class="digital-video-player" playsinline preload="metadata" controls></video>
+                  <div class="avatar-video-standby" id="avatarVideoStandby">
+                    <video
+                      id="avatarStandbyVideo"
+                      class="avatar-standby-video"
+                      src="./assets/avatar/liteavatar-standby-loop.mp4"
+                      poster="./assets/avatar/liteavatar-standby.jpg"
+                      muted
+                      loop
+                      autoplay
+                      playsinline
+                      preload="auto"
+                      aria-label="LiteAvatar 真人数字人静音待命动画"
+                    ></video>
+                    <img src="./assets/avatar/liteavatar-standby.jpg" alt="LiteAvatar 真人数字人待命形象" />
+                    <div class="avatar-standby-caption">
+                      <strong>真人数字人待命</strong>
+                      <span>提问后将根据回答语音生成口型讲解。</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="openavatar-layer" id="openAvatarLayer" aria-live="polite">
+                  <div class="openavatar-toolbar" aria-hidden="true" hidden>
+                    <div>
+                      <strong>数字人渲染层</strong>
+                      <span id="openAvatarStatusText">检测中</span>
+                    </div>
+                    <button id="closeOpenAvatarButton" class="openavatar-close-button" type="button" aria-label="关闭数字人渲染层">关闭</button>
+                  </div>
+                  <iframe
+                    id="openAvatarFrame"
+                    class="openavatar-frame"
+                    title="数字人形象渲染层"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                    allow="autoplay"
+                    scrolling="no"
+                  ></iframe>
                 </div>
                 <div class="pet-nameplate" id="petNameplate">灵灵 · 景区 AI 导览员</div>
               </div>
@@ -198,6 +321,13 @@
                 <p class="eyebrow">实时讲解</p>
                 <h2 id="guideStatus">欢迎使用景区导览数字人</h2>
                 <p id="guideSubtitle">可以为你讲解景点、规划路线，也支持语音提问和英文回答。</p>
+                <div class="openavatar-entry" id="openAvatarEntry" hidden>
+                  <div>
+                    <strong>真人数字人渲染</strong>
+                    <span id="openAvatarEntryText">正在检测数字人渲染服务...</span>
+                  </div>
+                  <button id="openAvatarToggleButton" class="ghost-button" type="button" disabled>启用数字人</button>
+                </div>
               </div>
               <div class="stage-data-row" aria-label="导览能力状态">
                 <span><strong>即时</strong> 问答讲解</span>
@@ -383,6 +513,7 @@
                 <label>
                   服装主题
                   <select id="dhOutfitSelect">
+                    <option value="bio-face-rig">仿生面部 Rig</option>
                     <option value="asset-avatar">自制/授权立绘</option>
                     <option value="ling-shan">灵山青绿</option>
                     <option value="heritage-gold">文旅金</option>
@@ -638,6 +769,7 @@
                 <span>服务端语音：<strong id="aiServerTtsStatus">待检测</strong></span>
                 <span>英文回答：<strong id="aiEnglishStatus">待检测</strong></span>
                 <span>口型同步：<strong id="aiLipsyncStatus">待检测</strong></span>
+                <span>OpenAvatarChat：<strong id="aiOpenAvatarStatus">待检测</strong></span>
               </div>
             </section>
 
@@ -703,6 +835,6 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=20260601-vision-guide" defer></script>
+    <script src="./app.js?v=20260615-standby-loop" defer></script>
   </body>
 </html>

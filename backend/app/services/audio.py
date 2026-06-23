@@ -1,5 +1,7 @@
 import asyncio
 import base64
+import hashlib
+import json
 from pathlib import Path
 import time
 from uuid import uuid4
@@ -15,6 +17,9 @@ _TTS_RUNTIME_STATUS = {
     "local_tts_enabled": False,
     "local_tts_provider": "moss_onnx",
     "local_tts_base_url": "",
+    "edge_tts_cache_enabled": True,
+    "edge_tts_cache_items": 0,
+    "edge_tts_cache_last_hit": False,
     "server_tts_ready": False,
     "last_provider": "",
     "last_error": "",
@@ -29,6 +34,9 @@ def reset_tts_runtime_status() -> None:
             "local_tts_enabled": bool(settings.local_tts_enabled),
             "local_tts_provider": settings.local_tts_provider,
             "local_tts_base_url": settings.local_tts_base_url,
+            "edge_tts_cache_enabled": bool(settings.edge_tts_cache_enabled),
+            "edge_tts_cache_items": _edge_cache_count(),
+            "edge_tts_cache_last_hit": False,
             "server_tts_ready": False,
             "last_provider": "",
             "last_error": "",
@@ -45,6 +53,8 @@ def get_tts_runtime_status() -> dict:
             "local_tts_enabled": bool(settings.local_tts_enabled),
             "local_tts_provider": settings.local_tts_provider,
             "local_tts_base_url": settings.local_tts_base_url,
+            "edge_tts_cache_enabled": bool(settings.edge_tts_cache_enabled),
+            "edge_tts_cache_items": _edge_cache_count(),
         }
     )
     return status
@@ -68,6 +78,7 @@ def _set_tts_runtime_status(
     provider: str = "",
     error: str = "",
     elapsed_seconds: float = 0.0,
+    edge_cache_hit: bool = False,
 ) -> None:
     _TTS_RUNTIME_STATUS.update(
         {
@@ -75,6 +86,9 @@ def _set_tts_runtime_status(
             "local_tts_enabled": bool(settings.local_tts_enabled),
             "local_tts_provider": settings.local_tts_provider,
             "local_tts_base_url": settings.local_tts_base_url,
+            "edge_tts_cache_enabled": bool(settings.edge_tts_cache_enabled),
+            "edge_tts_cache_items": _edge_cache_count(),
+            "edge_tts_cache_last_hit": bool(edge_cache_hit),
             "server_tts_ready": bool(ready),
             "last_provider": provider,
             "last_error": error,
@@ -92,6 +106,56 @@ def _new_output_path(extension: str) -> tuple[str, Path]:
     safe_extension = extension if extension.startswith(".") else f".{extension}"
     output_name = f"answer_{uuid4().hex}{safe_extension}"
     return output_name, settings.audio_output_dir / output_name
+
+
+def _edge_cache_dir() -> Path:
+    return settings.audio_output_dir / "cache"
+
+
+def _edge_cache_count() -> int:
+    cache_dir = _edge_cache_dir()
+    if not cache_dir.exists():
+        return 0
+    return sum(1 for _item in cache_dir.glob("edge_*.mp3"))
+
+
+def _edge_cache_payload(text: str, voice_name: str | None) -> dict:
+    return {
+        "provider": "edge_tts",
+        "cache_version": settings.edge_tts_cache_version,
+        "voice_name": voice_name or settings.tts_voice,
+        "tts_max_chars": settings.tts_max_chars,
+        "text": text[: settings.tts_max_chars],
+    }
+
+
+def _edge_cache_path(text: str, voice_name: str | None) -> Path:
+    payload = json.dumps(_edge_cache_payload(text, voice_name), ensure_ascii=False, sort_keys=True)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return _edge_cache_dir() / f"edge_{digest}.mp3"
+
+
+def _audio_url_from_path(path: Path) -> str:
+    relative_path = path.relative_to(settings.audio_output_dir).as_posix()
+    return f"/generated/audio/{relative_path}"
+
+
+def _prune_edge_cache() -> None:
+    max_items = int(settings.edge_tts_cache_max_items or 0)
+    if max_items <= 0:
+        return
+
+    cache_dir = _edge_cache_dir()
+    if not cache_dir.exists():
+        return
+
+    cached_files = sorted(
+        cache_dir.glob("edge_*.mp3"),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+    for stale_file in cached_files[max_items:]:
+        stale_file.unlink(missing_ok=True)
 
 
 def _delete_partial_file(output_path: Path) -> None:
@@ -162,11 +226,28 @@ def _generate_local_tts_audio(text: str, _voice_name: str | None = None) -> str 
     return _generate_moss_onnx_audio(text)
 
 
-def _generate_edge_tts_audio(text: str, voice_name: str | None = None) -> str | None:
+def _generate_edge_tts_audio(text: str, voice_name: str | None = None) -> tuple[str | None, bool]:
+    if settings.edge_tts_cache_enabled:
+        cache_path = _edge_cache_path(text, voice_name)
+        if cache_path.exists() and cache_path.stat().st_size > 0:
+            cache_path.touch()
+            return _audio_url_from_path(cache_path), True
+
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = cache_path.with_name(f"{cache_path.stem}.{uuid4().hex}.tmp.mp3")
+        try:
+            asyncio.run(_synthesize_to_file(text, temp_path, voice_name))
+            temp_path.replace(cache_path)
+            _prune_edge_cache()
+            return _audio_url_from_path(cache_path), False
+        except Exception:
+            _delete_partial_file(temp_path)
+            raise
+
     output_name, output_path = _new_output_path(".mp3")
     try:
         asyncio.run(_synthesize_to_file(text, output_path, voice_name))
-        return f"/generated/audio/{output_name}"
+        return f"/generated/audio/{output_name}", False
     except Exception:
         _delete_partial_file(output_path)
         raise
@@ -207,12 +288,13 @@ def generate_tts_audio(text: str, voice_name: str | None = None, enabled: bool |
 
     if provider in {"auto", "edge"}:
         try:
-            audio_url = _generate_edge_tts_audio(text, voice_name)
+            audio_url, cache_hit = _generate_edge_tts_audio(text, voice_name)
             if audio_url:
                 _set_tts_runtime_status(
                     ready=True,
-                    provider="edge_tts",
+                    provider="edge_tts_cache" if cache_hit else "edge_tts",
                     elapsed_seconds=time.perf_counter() - started,
+                    edge_cache_hit=cache_hit,
                 )
                 return audio_url
         except Exception as exc:

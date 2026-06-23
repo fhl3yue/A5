@@ -930,7 +930,7 @@ def answer_question(
     else:
         audio_status = "pending" if should_enqueue_audio else "failed"
     audio_url = None
-    digital_video = generate_digital_video(answer, None)
+    video_status = "waiting_audio" if should_enqueue_audio and settings.avatar_only_enabled else "disabled"
     elapsed = round(time.perf_counter() - started, 3)
 
     log = QALog(
@@ -943,6 +943,10 @@ def answer_question(
         audio_url="",
         audio_status=audio_status,
         audio_ready_seconds=0.0,
+        video_url="",
+        video_status=video_status,
+        video_message="",
+        video_ready_seconds=0.0,
     )
     db.add(log)
     db.commit()
@@ -958,10 +962,10 @@ def answer_question(
         "english_available": english_service_configured(),
         "answer_source": answer_source,
         "model_name": main_model_name() if model_service_configured() else "",
-        "lipsync_available": False,
+        "lipsync_available": tts_mode == "local_preferred",
         "tts_mode_used": tts_mode_used,
-        "video_url": digital_video.video_url,
-        "video_status": digital_video.video_status,
+        "video_url": None,
+        "video_status": video_status,
         "emotion": emotion,
         "reference": reference_titles,
         "response_seconds": elapsed,

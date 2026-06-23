@@ -20,6 +20,9 @@ class ChatData(BaseModel):
     answer_source: str = "local"
     model_name: str = ""
     lipsync_available: bool = False
+    lipsync_url: str | None = None
+    lipsync_provider: str = ""
+    mouth_cue_count: int = 0
     tts_mode_used: str = "server_async"
     video_url: str | None = None
     video_status: str = "disabled"
@@ -81,7 +84,13 @@ class AudioStatusData(BaseModel):
     audio_status: str
     audio_url: str | None = None
     lipsync_available: bool = False
+    lipsync_url: str | None = None
+    lipsync_provider: str = ""
+    mouth_cue_count: int = 0
     tts_mode_used: str = "server_async"
+    video_url: str | None = None
+    video_status: str = "disabled"
+    video_message: str = ""
 
 
 class AudioStatusResponse(BaseModel):
@@ -187,6 +196,11 @@ class DigitalVideoStatusData(BaseModel):
     average_response_seconds: float
     fallback_count: int
     total_requests: int
+    provider: str = "external"
+    avatar_only_enabled: bool = False
+    avatar_only_configured: bool = False
+    avatar_only_ready: bool = False
+    avatar_only_base_url: str = ""
 
 
 class DigitalVideoStatusResponse(BaseModel):
@@ -243,6 +257,9 @@ class AIStatusData(BaseModel):
     local_tts_enabled: bool = False
     local_tts_provider: str = ""
     local_tts_base_url: str = ""
+    edge_tts_cache_enabled: bool = True
+    edge_tts_cache_items: int = 0
+    edge_tts_cache_last_hit: bool = False
     server_tts_ready: bool = False
     server_tts_last_provider: str = ""
     server_tts_last_error: str = ""
@@ -250,8 +267,24 @@ class AIStatusData(BaseModel):
     english_available: bool
     english_tts_enabled: bool
     lipsync_available: bool
+    rhubarb_lipsync_enabled: bool = False
+    rhubarb_lipsync_available: bool = False
+    lipsync_cache_enabled: bool = True
+    lipsync_cache_items: int = 0
     digital_video_enabled: bool
     digital_video_configured: bool
+    avatar_only_enabled: bool = False
+    avatar_only_configured: bool = False
+    avatar_only_ready: bool = False
+    avatar_only_base_url: str = ""
+    openavatar_enabled: bool = False
+    openavatar_configured: bool = False
+    openavatar_ready: bool = False
+    openavatar_ui_url: str = ""
+    openavatar_mode: str = "iframe"
+    openavatar_profile: str = ""
+    openavatar_last_error: str = ""
+    openavatar_last_elapsed_seconds: float = 0.0
     status_notes: list[str] = []
 
 

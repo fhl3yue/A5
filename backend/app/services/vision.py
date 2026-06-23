@@ -246,6 +246,7 @@ def _fallback_image_answer(
     )
     digital_human = get_or_create_config(db)
     audio_status = "not_requested" if tts_mode == "local_preferred" else ("pending" if settings.enable_tts else "failed")
+    video_status = "waiting_audio" if audio_status == "pending" and settings.avatar_only_enabled else "disabled"
     log = QALog(
         user_id=user_id,
         question=question or "图片识别导览",
@@ -256,6 +257,7 @@ def _fallback_image_answer(
         audio_url="",
         audio_status=audio_status,
         audio_ready_seconds=0.0,
+        video_status=video_status,
     )
     db.add(log)
     db.commit()
@@ -270,10 +272,10 @@ def _fallback_image_answer(
         "english_available": english_service_configured(),
         "answer_source": "vision_unmatched",
         "model_name": main_model_name() if model_service_configured() else "",
-        "lipsync_available": False,
+        "lipsync_available": tts_mode == "local_preferred",
         "tts_mode_used": "browser_local" if tts_mode == "local_preferred" else "server_async",
         "video_url": None,
-        "video_status": "disabled",
+        "video_status": video_status,
         "emotion": "neutral",
         "reference": ["多模态视觉识别"],
         "response_seconds": log.response_seconds,

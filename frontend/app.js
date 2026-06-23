@@ -6,6 +6,9 @@ const state = {
   audioSource: null,
   lipSyncFrame: null,
   lipSyncBuffer: null,
+  lipSyncCues: null,
+  lipSyncCueFrame: null,
+  lipSyncCueStartedAt: 0,
   video: null,
   answerTranslations: {},
   answerPayloads: {},
@@ -13,6 +16,15 @@ const state = {
   pendingServerAudioRequests: {},
   localSpeechUtterance: null,
   localSpeechTimer: null,
+  avatarOnlyEnabled: false,
+  avatarOnlyReady: false,
+  openAvatar: null,
+  openAvatarReady: false,
+  openAvatarLastSpokenLogId: null,
+  openAvatarHealth: null,
+  openAvatarBlankReports: 0,
+  openAvatarReadyReports: 0,
+  openAvatarSuppressed: false,
   recorder: null,
   recordingStream: null,
   recordingChunks: [],
@@ -22,12 +34,30 @@ const state = {
   guideMode: "qa",
 };
 
+const RHUBARB_VISEMES = {
+  A: { shape: "x", open: 0.02 },
+  B: { shape: "f", open: 0.12 },
+  C: { shape: "e", open: 0.34 },
+  D: { shape: "a", open: 0.58 },
+  E: { shape: "o", open: 0.5 },
+  F: { shape: "f", open: 0.22 },
+  G: { shape: "a", open: 0.82 },
+  H: { shape: "o", open: 0.78 },
+  X: { shape: "x", open: 0.04 },
+};
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const DEFAULT_AVATAR_URL = "./assets/avatar/avatar-guide-v1.png";
 const LEGACY_LICENSED_AVATAR_URL = "./assets/avatar/licensed-character.png";
+const CUSTOM_AVATAR_THEMES = new Set(["asset-avatar", "licensed-asset"]);
 const runtimeParams = new URLSearchParams(window.location.search);
 const runtimeClient = (runtimeParams.get("client") || "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+const debugFaceRig = runtimeParams.get("debugFace") === "1";
+const AVATAR_REVEAL_MIN_MS = 900;
+const AVATAR_REVEAL_MAX_MS = 10000;
+const AVATAR_REVEAL_POLL_MS = 700;
+const AVATAR_REVEAL_PRELOAD_MS = 1800;
 
 function getStoredApiBaseUrl() {
   try {
@@ -71,6 +101,9 @@ const GUIDE_MODE_META = {
 
 if (runtimeClient) {
   document.body.classList.add(`client-${runtimeClient}`);
+}
+if (debugFaceRig) {
+  document.body.classList.add("debug-face-rig");
 }
 const ZH_TW_TO_CN = {
   "萬": "万",
@@ -327,6 +360,14 @@ const elements = {
   licensedAvatarFallback: $("#licensedAvatarFallback"),
   digitalVideoLayer: $("#digitalVideoLayer"),
   digitalVideoPlayer: $("#digitalVideoPlayer"),
+  avatarStandbyVideo: $("#avatarStandbyVideo"),
+  openAvatarLayer: $("#openAvatarLayer"),
+  openAvatarFrame: $("#openAvatarFrame"),
+  openAvatarStatusText: $("#openAvatarStatusText"),
+  openAvatarEntry: $("#openAvatarEntry"),
+  openAvatarEntryText: $("#openAvatarEntryText"),
+  openAvatarToggleButton: $("#openAvatarToggleButton"),
+  closeOpenAvatarButton: $("#closeOpenAvatarButton"),
   guideStatus: $("#guideStatus"),
   guideSubtitle: $("#guideSubtitle"),
   chatMessages: $("#chatMessages"),
@@ -424,6 +465,7 @@ const elements = {
   aiServerTtsStatus: $("#aiServerTtsStatus"),
   aiEnglishStatus: $("#aiEnglishStatus"),
   aiLipsyncStatus: $("#aiLipsyncStatus"),
+  aiOpenAvatarStatus: $("#aiOpenAvatarStatus"),
   runEvaluationButton: $("#runEvaluationButton"),
   evaluationPassed: $("#evaluationPassed"),
   evaluationAccuracy: $("#evaluationAccuracy"),
@@ -521,6 +563,56 @@ function setPetMode(mode) {
   if (mode) {
     elements.avatarFrame.classList.add(mode);
   }
+  applyFaceRig({ emotion: mode || "neutral" });
+}
+
+function normalizeMouthShape(shape) {
+  return ["x", "a", "o", "e", "f"].includes(shape) ? shape : "x";
+}
+
+function applyFaceRig(params = {}) {
+  if (!elements.avatarFrame) {
+    return;
+  }
+  const mouthOpen = Math.max(0, Math.min(1, Number(params.mouthOpen ?? 0)));
+  const shape = normalizeMouthShape(params.mouthShape || (mouthOpen > 0.55 ? "a" : mouthOpen > 0.2 ? "e" : "x"));
+  const emotion = params.emotion || "";
+  const speakingBoost = emotion === "speaking" ? 0.12 : 0;
+  const eyeOpen = Math.max(0.08, Math.min(1.15, Number(params.eyeOpen ?? (emotion === "listening" ? 0.86 : 1))));
+  const browLift = Number(params.browLift ?? (emotion === "thinking" ? 4 : emotion === "success" ? 2 : 0));
+  const headYaw = Number(params.headYaw ?? (mouthOpen * 1.4));
+  const headPitch = Number(params.headPitch ?? (-mouthOpen * 3));
+  const smile = Number(params.smile ?? (emotion === "success" ? 3 : 0));
+  const shapeWeights = {
+    x: shape === "x" ? 1 : 0,
+    a: shape === "a" ? 1 : 0,
+    o: shape === "o" ? 1 : 0,
+    e: shape === "e" ? 1 : 0,
+    f: shape === "f" ? 1 : 0,
+  };
+
+  elements.avatarFrame.style.setProperty("--mouth-open", mouthOpen.toFixed(3));
+  elements.avatarFrame.style.setProperty("--voice-level", Number(params.voiceLevel ?? mouthOpen / 4).toFixed(3));
+  elements.avatarFrame.style.setProperty("--mouth-scale", (0.55 + mouthOpen * 1.75 + speakingBoost).toFixed(3));
+  elements.avatarFrame.style.setProperty("--mouth-shift", `${(mouthOpen * 3).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--mouth-stroke", `${(5 + mouthOpen * 10).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--head-lift", `${headPitch.toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--head-rotate", `${headYaw.toFixed(2)}deg`);
+  elements.avatarFrame.style.setProperty("--avatar-lift", `${(-mouthOpen * 12).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--avatar-scale", (1 + mouthOpen * 0.035).toFixed(3));
+  elements.avatarFrame.style.setProperty("--voice-glow", `${(16 + mouthOpen * 18).toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--eye-scale", eyeOpen.toFixed(3));
+  elements.avatarFrame.style.setProperty("--face-mouth-x", shapeWeights.x.toFixed(3));
+  elements.avatarFrame.style.setProperty("--face-mouth-a", shapeWeights.a.toFixed(3));
+  elements.avatarFrame.style.setProperty("--face-mouth-o", shapeWeights.o.toFixed(3));
+  elements.avatarFrame.style.setProperty("--face-mouth-e", shapeWeights.e.toFixed(3));
+  elements.avatarFrame.style.setProperty("--face-mouth-f", shapeWeights.f.toFixed(3));
+  elements.avatarFrame.style.setProperty("--face-eye-open", eyeOpen.toFixed(3));
+  elements.avatarFrame.style.setProperty("--face-brow-lift", `${browLift.toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--face-head-yaw", `${headYaw.toFixed(2)}deg`);
+  elements.avatarFrame.style.setProperty("--face-head-pitch", `${headPitch.toFixed(2)}px`);
+  elements.avatarFrame.style.setProperty("--face-smile", `${smile.toFixed(2)}px`);
+  elements.avatarFrame.dataset.mouthShape = shape;
 }
 
 function isMobileRuntime() {
@@ -528,10 +620,13 @@ function isMobileRuntime() {
 }
 
 function browserLocalTtsSupported() {
-  return !isMobileRuntime() && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+  return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 }
 
 function preferredTtsMode() {
+  if (state.avatarOnlyEnabled) {
+    return "server_only";
+  }
   return browserLocalTtsSupported() ? "local_preferred" : "server_only";
 }
 
@@ -574,17 +669,16 @@ function pulseLocalSpeechMouth() {
   }
   const mouthOpen = 0.28 + Math.random() * 0.42;
   elements.avatarFrame.classList.add("audio-driven-speaking");
-  elements.avatarFrame.style.setProperty("--mouth-open", mouthOpen.toFixed(3));
-  elements.avatarFrame.style.setProperty("--voice-level", (mouthOpen / 4).toFixed(3));
-  elements.avatarFrame.style.setProperty("--mouth-scale", (0.72 + mouthOpen * 1.45).toFixed(3));
-  elements.avatarFrame.style.setProperty("--mouth-shift", `${(mouthOpen * 3).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--mouth-stroke", `${(5 + mouthOpen * 9).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--head-lift", `${(-mouthOpen * 2.4).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--head-rotate", `${(mouthOpen * 1.1).toFixed(2)}deg`);
-  elements.avatarFrame.style.setProperty("--avatar-lift", `${(-mouthOpen * 9).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--avatar-scale", (1 + mouthOpen * 0.025).toFixed(3));
-  elements.avatarFrame.style.setProperty("--voice-glow", `${(16 + mouthOpen * 16).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--eye-scale", (1 - mouthOpen * 0.06).toFixed(3));
+  const shapes = ["a", "e", "o", "f"];
+  applyFaceRig({
+    mouthOpen,
+    mouthShape: shapes[Math.floor(Math.random() * shapes.length)],
+    voiceLevel: mouthOpen / 4,
+    eyeOpen: 1 - mouthOpen * 0.06,
+    headYaw: mouthOpen * 1.1,
+    headPitch: -mouthOpen * 2.4,
+    emotion: "speaking",
+  });
 }
 
 function startLocalSpeechLipSync() {
@@ -613,6 +707,9 @@ function resetLipSync() {
   if (state.lipSyncFrame) {
     cancelAnimationFrame(state.lipSyncFrame);
   }
+  if (state.lipSyncCueFrame) {
+    cancelAnimationFrame(state.lipSyncCueFrame);
+  }
   window.clearInterval(state.localSpeechTimer);
   state.localSpeechTimer = null;
   try {
@@ -622,6 +719,9 @@ function resetLipSync() {
     // Audio graph may already be closed by the browser.
   }
   state.lipSyncFrame = null;
+  state.lipSyncCueFrame = null;
+  state.lipSyncCueStartedAt = 0;
+  state.lipSyncCues = null;
   state.audioAnalyser = null;
   state.audioSource = null;
   state.lipSyncBuffer = null;
@@ -638,7 +738,64 @@ function resetLipSync() {
     elements.avatarFrame.style.setProperty("--avatar-scale", "1");
     elements.avatarFrame.style.setProperty("--voice-glow", "18px");
     elements.avatarFrame.style.setProperty("--eye-scale", "1");
+    applyFaceRig({ mouthOpen: 0, mouthShape: "x", emotion: "neutral" });
   }
+}
+
+async function loadMouthCues(lipsyncUrl) {
+  if (!lipsyncUrl) {
+    return null;
+  }
+  try {
+    const response = await fetch(resolveMediaUrl(lipsyncUrl));
+    if (!response.ok) {
+      return null;
+    }
+    const payload = await response.json();
+    return Array.isArray(payload.mouthCues) ? payload.mouthCues : null;
+  } catch {
+    return null;
+  }
+}
+
+function withTimeout(promise, timeoutMs, fallback = null) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => window.setTimeout(() => resolve(fallback), timeoutMs)),
+  ]);
+}
+
+function applyRhubarbCue(cue) {
+  const viseme = RHUBARB_VISEMES[cue?.value] || RHUBARB_VISEMES.X;
+  applyFaceRig({
+    mouthOpen: viseme.open,
+    mouthShape: viseme.shape,
+    voiceLevel: viseme.open / 3,
+    eyeOpen: 1 - viseme.open * 0.05,
+    headYaw: viseme.open * 1.2,
+    headPitch: -viseme.open * 2.2,
+    emotion: "speaking",
+  });
+}
+
+function startCueLipSync(audio, cues) {
+  if (!audio || !Array.isArray(cues) || cues.length === 0 || !elements.avatarFrame) {
+    return false;
+  }
+  markSpeaking();
+  elements.avatarFrame.classList.add("audio-driven-speaking");
+  state.lipSyncCues = cues;
+  const tick = () => {
+    if (!state.audio || state.audio !== audio || audio.paused || audio.ended) {
+      return;
+    }
+    const current = audio.currentTime;
+    const cue = cues.find((item) => current >= Number(item.start) && current < Number(item.end));
+    applyRhubarbCue(cue || { value: "X" });
+    state.lipSyncCueFrame = requestAnimationFrame(tick);
+  };
+  tick();
+  return true;
 }
 
 function startAudioLipSync(audio) {
@@ -666,6 +823,7 @@ function startAudioLipSync(audio) {
     pumpLipSync();
   } catch {
     elements.avatarFrame.classList.add("audio-driven-speaking");
+    applyFaceRig({ mouthOpen: 0.34, mouthShape: "e", emotion: "speaking" });
   }
 }
 
@@ -681,17 +839,16 @@ function pumpLipSync() {
   }
   const rms = Math.sqrt(sum / state.lipSyncBuffer.length);
   const mouthOpen = Math.max(0.04, Math.min(1, rms * 4.8));
-  elements.avatarFrame.style.setProperty("--mouth-open", mouthOpen.toFixed(3));
-  elements.avatarFrame.style.setProperty("--voice-level", rms.toFixed(3));
-  elements.avatarFrame.style.setProperty("--mouth-scale", (0.55 + mouthOpen * 1.75).toFixed(3));
-  elements.avatarFrame.style.setProperty("--mouth-shift", `${(mouthOpen * 3).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--mouth-stroke", `${(5 + mouthOpen * 10).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--head-lift", `${(-mouthOpen * 3).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--head-rotate", `${(mouthOpen * 1.4).toFixed(2)}deg`);
-  elements.avatarFrame.style.setProperty("--avatar-lift", `${(-mouthOpen * 12).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--avatar-scale", (1 + mouthOpen * 0.035).toFixed(3));
-  elements.avatarFrame.style.setProperty("--voice-glow", `${(16 + mouthOpen * 18).toFixed(2)}px`);
-  elements.avatarFrame.style.setProperty("--eye-scale", (1 - mouthOpen * 0.08).toFixed(3));
+  const shape = mouthOpen > 0.72 ? "a" : mouthOpen > 0.48 ? "o" : mouthOpen > 0.22 ? "e" : "x";
+  applyFaceRig({
+    mouthOpen,
+    mouthShape: shape,
+    voiceLevel: rms,
+    eyeOpen: 1 - mouthOpen * 0.08,
+    headYaw: mouthOpen * 1.4,
+    headPitch: -mouthOpen * 3,
+    emotion: "speaking",
+  });
   state.lipSyncFrame = requestAnimationFrame(pumpLipSync);
 }
 
@@ -711,16 +868,16 @@ function applyGuideMode(mode, { autofill = false } = {}) {
 
 function voiceLabel(voiceName) {
   const labels = {
-    "zh-CN-XiaoxiaoNeural": "晓晓女声",
-    "zh-CN-YunxiNeural": "云希男声",
-    "zh-CN-XiaoyiNeural": "晓伊女声",
-    "zh-CN-YunjianNeural": "云健男声",
+    "zh-CN-XiaoxiaoNeural": "鏅撴檽濂冲０",
+    "zh-CN-YunxiNeural": "浜戝笇鐢峰０",
+    "zh-CN-XiaoyiNeural": "鏅撲紛濂冲０",
+    "zh-CN-YunjianNeural": "浜戝仴鐢峰０",
   };
-  return labels[voiceName] || voiceName || "中文声线";
+  return labels[voiceName] || voiceName || "涓枃澹扮嚎";
 }
 
 function looksLikeGarbledName(value) {
-  return /[╛╡╟┬├╙╬╩▌╨╖╓┴╔╜╠╪╕─]|â|Ã|Â/.test(value || "");
+  return /[鈺涒暋鈺熲敩鈹溾暀鈺暕鈻屸暔鈺栤晸鈹粹晹鈺溾暊鈺晻鈹€]|芒|脙|脗/.test(value || "");
 }
 
 function docDisplayName(doc) {
@@ -728,16 +885,17 @@ function docDisplayName(doc) {
     return doc.name;
   }
   if (doc.content_type === "xlsx") {
-    return "官方游客行为数据.xlsx";
+    return "瀹樻柟娓稿琛屼负鏁版嵁.xlsx";
   }
   if (doc.chunk_count >= 50) {
-    return "官方景区文旅资料.docx";
+    return "瀹樻柟鏅尯鏂囨梾璧勬枡.docx";
   }
-  return "官方景区结构资料.docx";
+  return "瀹樻柟鏅尯缁撴瀯璧勬枡.docx";
 }
 
 function themeClass(outfitTheme) {
   const classes = {
+    "bio-face-rig": "theme-bio-face-rig",
     "asset-avatar": "theme-asset-avatar",
     "heritage-gold": "theme-heritage-gold",
     "lake-blue": "theme-lake-blue",
@@ -758,7 +916,7 @@ function readDigitalHumanForm() {
     avatar_asset_url: elements.dhAvatarAssetUrlInput.value.trim(),
     fallback_message: elements.dhFallbackMessageInput.value.trim(),
     service_boundary: elements.dhServiceBoundaryInput.value.trim(),
-    video_provider_status: "外部视频 API",
+    video_provider_status: "澶栭儴瑙嗛 API",
   };
 }
 
@@ -769,12 +927,13 @@ function fillDigitalHumanForm(config) {
   elements.dhNameInput.value = config.name || "灵灵";
   elements.dhRoleInput.value = config.role_title || "景区 AI 导览员";
   elements.dhScenicInput.value = config.scenic_area || "灵山胜境";
-  elements.dhOutfitSelect.value = config.outfit_theme || "ling-shan";
+  elements.dhOutfitSelect.value = config.outfit_theme || "asset-avatar";
   elements.dhVoiceSelect.value = config.voice_name || "zh-CN-XiaoxiaoNeural";
   elements.dhAvatarAssetUrlInput.value = config.avatar_asset_url || DEFAULT_AVATAR_URL;
   elements.dhGreetingInput.value = config.greeting || "";
   elements.dhFallbackMessageInput.value = config.fallback_message || "数字人视频暂不可用，已切换为语音讲解。";
-  elements.dhServiceBoundaryInput.value = config.service_boundary || "仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。";
+  elements.dhServiceBoundaryInput.value =
+    config.service_boundary || "仅基于景区知识库进行导览讲解，不提供功德承诺、神迹保证或占卜预测。";
 }
 
 function applyDigitalHumanConfig(config) {
@@ -782,12 +941,16 @@ function applyDigitalHumanConfig(config) {
     return;
   }
   state.digitalHuman = config;
-  document.body.classList.remove("theme-asset-avatar", "theme-heritage-gold", "theme-lake-blue", "theme-festival-red", "theme-licensed-asset");
+  document.body.classList.remove("theme-bio-face-rig", "theme-asset-avatar", "theme-heritage-gold", "theme-lake-blue", "theme-festival-red", "theme-licensed-asset");
   const nextTheme = themeClass(config.outfit_theme);
   if (nextTheme) {
     document.body.classList.add(nextTheme);
   }
-  const assetUrl = config.avatar_asset_url || (config.outfit_theme === "licensed-asset" ? LEGACY_LICENSED_AVATAR_URL : "");
+  const assetUrl = state.avatarOnlyEnabled
+    ? ""
+    : CUSTOM_AVATAR_THEMES.has(config.outfit_theme)
+    ? config.avatar_asset_url || (config.outfit_theme === "licensed-asset" ? LEGACY_LICENSED_AVATAR_URL : "")
+    : "";
   syncLicensedAvatarAsset(assetUrl);
 
   elements.petNameplate.textContent = `${config.name} · ${config.role_title}`;
@@ -809,6 +972,70 @@ function applyDigitalHumanConfig(config) {
   fillDigitalHumanForm(config);
 }
 
+function setAvatarOnlyMode(enabled, ready = false) {
+  state.avatarOnlyEnabled = Boolean(enabled);
+  state.avatarOnlyReady = Boolean(ready);
+  document.body.classList.toggle("avatar-only-mode", state.avatarOnlyEnabled);
+  if (state.avatarOnlyEnabled) {
+    window.setTimeout(startAvatarStandbyLoop, 0);
+  } else {
+    pauseAvatarStandbyLoop();
+  }
+  if (state.avatarOnlyEnabled) {
+    document.body.classList.remove("custom-avatar-active", "licensed-avatar-ready");
+    if (elements.licensedAvatarImage) {
+      elements.licensedAvatarImage.removeAttribute("src");
+    }
+    if (!elements.avatarFrame?.classList.contains("video-active")) {
+      setPetSpeech(state.avatarOnlyReady ? "真人数字人待命" : "真人数字人服务待启动");
+    }
+  }
+}
+
+function startAvatarStandbyLoop() {
+  const standby = elements.avatarStandbyVideo;
+  if (!standby || !state.avatarOnlyEnabled || elements.avatarFrame?.classList.contains("video-active")) {
+    return;
+  }
+  standby.muted = true;
+  standby.loop = true;
+  standby.playsInline = true;
+  const playPromise = standby.play();
+  if (playPromise?.catch) {
+    playPromise.catch(() => {
+      // Muted autoplay is normally allowed; if blocked, the poster remains visible.
+    });
+  }
+}
+
+function pauseAvatarStandbyLoop() {
+  const standby = elements.avatarStandbyVideo;
+  if (!standby) {
+    return;
+  }
+  standby.pause();
+}
+
+function bindAvatarStandbyVideo() {
+  const standby = elements.avatarStandbyVideo;
+  if (!standby) {
+    return;
+  }
+  standby.muted = true;
+  standby.loop = true;
+  standby.playsInline = true;
+  standby.addEventListener("canplay", startAvatarStandbyLoop);
+  standby.addEventListener("loadeddata", startAvatarStandbyLoop);
+  window.addEventListener("focus", startAvatarStandbyLoop);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      startAvatarStandbyLoop();
+    }
+  });
+  document.addEventListener("pointerdown", startAvatarStandbyLoop, { once: true });
+  document.addEventListener("keydown", startAvatarStandbyLoop, { once: true });
+}
+
 function bindLicensedAvatarAsset() {
   if (!elements.licensedAvatarImage) {
     return;
@@ -818,6 +1045,7 @@ function bindLicensedAvatarAsset() {
   });
   elements.licensedAvatarImage.addEventListener("error", () => {
     document.body.classList.remove("licensed-avatar-ready");
+    document.body.classList.remove("custom-avatar-active");
   });
 }
 
@@ -825,12 +1053,20 @@ async function syncLicensedAvatarAsset(assetUrl) {
   if (!elements.licensedAvatarImage) {
     return;
   }
-  if (!assetUrl) {
+  if (state.avatarOnlyEnabled) {
+    elements.licensedAvatarImage.removeAttribute("src");
+    document.body.classList.remove("licensed-avatar-ready", "custom-avatar-active");
+    return;
+  }
+  const isDeprecatedDefaultAvatar = /assets\/avatar\/default-guide-avatar\./i.test(assetUrl || "");
+  if (!assetUrl || isDeprecatedDefaultAvatar) {
     elements.licensedAvatarImage.removeAttribute("src");
     document.body.classList.remove("licensed-avatar-ready");
+    document.body.classList.remove("custom-avatar-active");
     return;
   }
 
+  document.body.classList.add("custom-avatar-active");
   document.body.classList.add("theme-asset-avatar");
   const resolved = resolveMediaUrl(assetUrl);
   const separator = resolved.includes("?") ? "&" : "?";
@@ -842,7 +1078,7 @@ async function loadDigitalHumanConfig() {
     const config = await apiFetch("/api/digital-human/config");
     applyDigitalHumanConfig(config);
   } catch (error) {
-    showToast(`数字人配置加载失败：${error.message}`, "error");
+    showToast(`鏁板瓧浜洪厤缃姞杞藉け璐ワ細${error.message}`, "error");
   }
 }
 
@@ -915,15 +1151,30 @@ async function loadRagStatus({ silent = true } = {}) {
   }
 }
 
+async function loadAiCapabilityStatus({ silent = true } = {}) {
+  try {
+    const status = await apiFetch("/api/admin/ai/status");
+    renderAiStatus(status);
+  } catch (error) {
+    if (!silent) {
+      showToast(error.message, "error");
+    }
+  }
+}
+
 function renderDigitalVideoStatus(status) {
-  const enabledText = status.enabled ? (status.configured ? "已启用" : "未配置地址") : "未启用";
+  const providerLabel = status.avatar_only_enabled ? "LiteAvatar-only" : "外部视频";
+  const enabledText = status.enabled ? (status.configured ? `${providerLabel} 已启用` : "未配置地址") : "未启用";
+  setAvatarOnlyMode(status.avatar_only_enabled, status.avatar_only_ready);
   elements.videoProviderEnabled.textContent = enabledText;
   elements.videoProviderLastStatus.textContent = status.last_status || "-";
   elements.videoProviderAverage.textContent = `${Number(status.average_response_seconds || 0).toFixed(2)}s`;
   elements.videoProviderFallbacks.textContent = status.fallback_count ?? 0;
   elements.videoProviderFailure.textContent = status.last_failure_reason || status.last_message || "无";
   if (elements.visitorVideoStatus) {
-    elements.visitorVideoStatus.textContent = status.enabled ? "可播放讲解" : "语音讲解可用";
+    elements.visitorVideoStatus.textContent = status.avatar_only_enabled
+      ? (status.avatar_only_ready ? "真人讲解已预热" : "真人讲解待启动")
+      : (status.enabled ? "可生成数字人讲解" : "语音讲解可用");
   }
 }
 
@@ -954,12 +1205,225 @@ function renderAiStatus(status) {
     const lastProvider = status.server_tts_last_provider || status.server_tts_provider || "-";
     const localLabel = status.local_tts_enabled ? "本地优先" : "本地未启用";
     const readyLabel = status.server_tts_ready ? "可用" : "待生成";
-    elements.aiServerTtsStatus.textContent = `${lastProvider} / ${localLabel} / ${readyLabel}`;
+    const cacheLabel = status.edge_tts_cache_enabled
+      ? `缓存${status.edge_tts_cache_items ?? 0}条${status.edge_tts_cache_last_hit ? " / 刚命中" : ""}`
+      : "缓存关闭";
+    elements.aiServerTtsStatus.textContent = `${lastProvider} / ${localLabel} / ${readyLabel} / ${cacheLabel}`;
   }
   elements.aiEnglishStatus.textContent = status.english_available
     ? (status.english_tts_enabled ? "英文文本+语音" : "英文文本")
     : "未配置";
-  elements.aiLipsyncStatus.textContent = status.lipsync_available ? "本地音频驱动" : "未启用";
+  if (elements.aiLipsyncStatus) {
+    const rhubarbLabel = status.rhubarb_lipsync_enabled
+      ? (status.rhubarb_lipsync_available ? "Rhubarb 口型" : "Rhubarb 未安装")
+      : "RMS 兜底";
+    const cacheLabel = status.lipsync_cache_enabled ? `缓存${status.lipsync_cache_items ?? 0}条` : "缓存关闭";
+    const avatarLabel = status.avatar_only_enabled
+      ? (status.avatar_only_ready ? "LiteAvatar-only 就绪" : "LiteAvatar-only 未就绪")
+      : "数字人视频未启用";
+    elements.aiLipsyncStatus.textContent = `${rhubarbLabel} / ${cacheLabel} / ${avatarLabel}`;
+  }
+  renderOpenAvatarStatus(status);
+}
+
+function renderOpenAvatarStatus(status = {}) {
+  state.openAvatar = status;
+  const enabled = Boolean(status.openavatar_enabled);
+  const configured = Boolean(status.openavatar_configured);
+  const ready = Boolean(status.openavatar_ready);
+  const uiUrl = status.openavatar_ui_url || "";
+  const profile = status.openavatar_profile || "LiteAvatar";
+  const elapsed = Number(status.openavatar_last_elapsed_seconds || 0).toFixed(2);
+
+  let label = "未启用";
+  let detail = "完整 OpenAvatarChat 嵌入未启用，当前优先使用 LiteAvatar-only 数字人视频链路。";
+  if (enabled && !configured) {
+    label = "未配置";
+    detail = "完整 OpenAvatarChat 地址未配置。";
+  } else if (enabled && ready) {
+    label = `已就绪 · ${profile}`;
+    detail = `完整 OpenAvatarChat 已就绪，检测 ${elapsed}s。`;
+  } else if (enabled) {
+    label = "未就绪";
+    detail = "完整 OpenAvatarChat 服务未启动或正在加载。";
+  }
+
+  if (elements.aiOpenAvatarStatus) {
+    elements.aiOpenAvatarStatus.textContent = label;
+  }
+  if (elements.openAvatarStatusText) {
+    elements.openAvatarStatusText.textContent = label;
+  }
+  if (elements.openAvatarEntryText) {
+    elements.openAvatarEntryText.textContent = detail;
+  }
+  if (elements.openAvatarToggleButton) {
+    elements.openAvatarToggleButton.disabled = !(enabled && configured && ready && uiUrl);
+    elements.openAvatarToggleButton.textContent = document.body.classList.contains("openavatar-active")
+      ? "关闭数字人"
+      : "启用数字人";
+  }
+}
+
+function getOpenAvatarEmbedUrl(rawUrl) {
+  const base = String(rawUrl || "").trim();
+  if (!base) return "";
+  try {
+    const url = new URL(base, window.location.href);
+    url.searchParams.set("embed", "1");
+    return url.toString();
+  } catch {
+    const separator = base.includes("?") ? "&" : "?";
+    return `${base}${separator}embed=1`;
+  }
+}
+
+function ensureOpenAvatarStage(options = {}) {
+  // The visitor experience now uses LiteAvatar avatar-only MP4 output.
+  // Keep the legacy full OpenAvatarChat iframe disabled unless it is
+  // explicitly re-enabled for debugging in the future.
+  document.body.classList.add("openavatar-suppressed");
+  document.body.classList.remove("openavatar-active");
+  if (!options.silent) {
+    showToast("当前使用 LiteAvatar-only 数字人视频链路，不再嵌入完整 OpenAvatarChat。", "info");
+  }
+  return false;
+}
+
+function ensureLegacyOpenAvatarStage(options = {}) {
+  const status = state.openAvatar || {};
+  const url = getOpenAvatarEmbedUrl(status.openavatar_ui_url || "");
+  if (state.openAvatarSuppressed) {
+    document.body.classList.add("openavatar-suppressed");
+    document.body.classList.remove("openavatar-active");
+    return false;
+  }
+  if (!status.openavatar_ready || !url || !elements.openAvatarFrame) {
+    if (!options.silent) {
+      showToast("完整 OpenAvatarChat 服务尚未就绪。", "error");
+    }
+    return false;
+  }
+  if (elements.openAvatarFrame.src !== url) {
+    state.openAvatarReady = false;
+    elements.openAvatarFrame.src = url;
+  }
+  document.body.classList.remove("openavatar-suppressed");
+  document.body.classList.add("openavatar-active");
+  return true;
+}
+
+function handleOpenAvatarHealth(event) {
+  const data = event.data;
+  if (!data || typeof data !== "object" || data.type !== "A5_AVATAR_HEALTH") {
+    return;
+  }
+  state.openAvatarHealth = data;
+  if (data.ready) {
+    state.openAvatarBlankReports = 0;
+    state.openAvatarReadyReports += 1;
+    if (state.openAvatarSuppressed && state.openAvatarReadyReports >= 2) {
+      state.openAvatarSuppressed = false;
+      document.body.classList.remove("openavatar-suppressed");
+      if (state.openAvatar?.openavatar_ready) {
+        ensureOpenAvatarStage({ silent: true });
+      }
+    }
+    return;
+  }
+
+  state.openAvatarBlankReports += 1;
+  state.openAvatarReadyReports = 0;
+  if (state.openAvatarBlankReports >= 3) {
+    state.openAvatarSuppressed = true;
+    document.body.classList.add("openavatar-suppressed");
+    document.body.classList.remove("openavatar-active");
+    setPetMode(null);
+    setPetSpeech("数字人导览中");
+    setGuideState("欢迎使用景区导览数字人", "完整 OpenAvatarChat 暂未输出有效画面，已保持当前导览展示。");
+    if (elements.openAvatarToggleButton) {
+      elements.openAvatarToggleButton.textContent = "启用数字人";
+    }
+  }
+}
+
+function postOpenAvatarMessage(message) {
+  if (!ensureLegacyOpenAvatarStage({ silent: true })) return false;
+  const frameWindow = elements.openAvatarFrame?.contentWindow;
+  if (!frameWindow) return false;
+  frameWindow.postMessage(message, "*");
+  return true;
+}
+
+function handleOpenAvatarFrameLoad() {
+  state.openAvatarReady = true;
+  const payload = state.currentLogId ? state.answerPayloads[state.currentLogId] : null;
+  if (payload) {
+    state.openAvatarLastSpokenLogId = null;
+    syncOpenAvatarAnswer(payload);
+  }
+}
+
+function syncOpenAvatarAnswer(data) {
+  if (!data || !data.answer || data.log_id === state.openAvatarLastSpokenLogId) return false;
+  if (!ensureOpenAvatarStage({ silent: true })) return false;
+  state.openAvatarLastSpokenLogId = data.log_id;
+  const answer = String(data.spoken_text || data.answer || "").replace(/\s+/g, " ").trim();
+  if (!answer) return false;
+  window.setTimeout(() => {
+    postOpenAvatarMessage({
+      type: "A5_SPEAK",
+      text: answer,
+      logId: data.log_id,
+      source: "a5-rag",
+    });
+  }, 500);
+  return true;
+}
+
+function openOpenAvatarLayer() {
+  const status = state.openAvatar || {};
+  const url = getOpenAvatarEmbedUrl(status.openavatar_ui_url || "");
+  if (!status.openavatar_ready || !url) {
+    showToast("完整 OpenAvatarChat 服务还未就绪。", "error");
+    return;
+  }
+  stopVideoPlayback();
+  stopAudioPlayback();
+  stopLocalSpeech();
+  state.openAvatarSuppressed = false;
+  state.openAvatarBlankReports = 0;
+  state.openAvatarReadyReports = 0;
+  document.body.classList.remove("openavatar-suppressed");
+  if (elements.openAvatarFrame && elements.openAvatarFrame.src !== url) {
+    elements.openAvatarFrame.src = url;
+  }
+  document.body.classList.add("openavatar-active");
+  if (elements.openAvatarToggleButton) {
+    elements.openAvatarToggleButton.textContent = "关闭数字人";
+  }
+  setGuideState("真人数字人已就绪", "你可以直接提问，我会结合景区知识库进行讲解。");
+  setPetSpeech("数字人讲解中");
+}
+
+function closeOpenAvatarLayer() {
+  document.body.classList.remove("openavatar-active");
+  state.openAvatarSuppressed = true;
+  state.openAvatarReadyReports = 0;
+  document.body.classList.add("openavatar-suppressed");
+  if (elements.openAvatarToggleButton) {
+    elements.openAvatarToggleButton.textContent = "启用数字人";
+  }
+  setPetMode(null);
+  setGuideState("欢迎使用景区导览数字人", "可以为你讲解景点、规划路线，也支持语音提问和英文回答。");
+}
+
+function toggleOpenAvatarLayer() {
+  if (document.body.classList.contains("openavatar-active")) {
+    closeOpenAvatarLayer();
+  } else {
+    openOpenAvatarLayer();
+  }
 }
 
 function renderEvaluationStatus(data) {
@@ -1083,7 +1547,7 @@ function normalizeReferenceLabel(value) {
     return "路线参考";
   }
   if (text.length > 16) {
-    return `${text.slice(0, 14)}…`;
+    return `${text.slice(0, 14)}...`;
   }
   return text;
 }
@@ -1110,7 +1574,7 @@ function renderReferenceTags(references = []) {
   const visible = normalized.slice(0, 3);
   const hidden = normalized.slice(3);
   return `
-    <div class="message-meta reference-meta" aria-label="知识参考关键词">
+    <div class="message-meta reference-meta" aria-label="鐭ヨ瘑鍙傝€冨叧閿瘝">
       ${visible.map((item) => `<span class="tag compact-tag" title="${escapeHtml(item.fullText)}">${escapeHtml(item.label)}</span>`).join("")}
       ${hidden.length ? `<span class="tag compact-tag tag-more" title="${escapeHtml(hidden.map((item) => item.fullText).join(" / "))}">+${hidden.length}</span>` : ""}
     </div>
@@ -1182,6 +1646,31 @@ function renderAudioAction(data) {
   return `<button class="small-action is-disabled" type="button" disabled title="语音生成中">语音生成中</button>`;
 }
 
+function renderVideoAction(data) {
+  const status = data.video_status || (data.video_url ? "ready" : "disabled");
+  if (status === "ready" && data.video_url) {
+    const playbackUrl = videoPlaybackUrl(data);
+    return `<button class="small-action avatar-video-action" type="button" data-video-url="${escapeHtml(playbackUrl)}" data-video-source-url="${escapeHtml(data.video_url)}" data-fallback-audio-url="${escapeHtml(data.audio_url || "")}">数字人讲解</button>`;
+  }
+  if (status === "pending") {
+    return `<button class="small-action is-disabled" type="button" disabled title="真人数字人视频正在生成">真人讲解生成中</button>`;
+  }
+  if (status === "waiting_audio") {
+    return `<button class="small-action is-disabled" type="button" disabled title="等待服务端语音生成后驱动数字人">等待真人讲解</button>`;
+  }
+  if (["timeout", "error", "failed"].includes(status)) {
+    return `<button class="small-action is-disabled" type="button" disabled title="${escapeHtml(data.video_message || "数字人视频暂不可用")}">数字人回退</button>`;
+  }
+  return "";
+}
+
+function videoPlaybackUrl(data) {
+  if (data?.log_id && data?.video_url) {
+    return `/api/chat/video/${encodeURIComponent(data.log_id)}`;
+  }
+  return data?.video_url || "";
+}
+
 function updateAnswerAudioUi(logId, data) {
   const messageNode = elements.chatMessages?.querySelector(`.message[data-log-id="${logId}"]`);
   if (!messageNode) {
@@ -1190,6 +1679,10 @@ function updateAnswerAudioUi(logId, data) {
   const actionSlot = messageNode.querySelector(`[data-audio-action-slot="${logId}"]`);
   if (actionSlot) {
     actionSlot.innerHTML = renderAudioAction(data);
+  }
+  const videoSlot = messageNode.querySelector(`[data-video-action-slot="${logId}"]`);
+  if (videoSlot) {
+    videoSlot.innerHTML = renderVideoAction(data);
   }
   if (state.answerPayloads[logId]) {
     state.answerPayloads[logId] = { ...state.answerPayloads[logId], ...data };
@@ -1202,20 +1695,34 @@ async function pollAnswerAudio(logId, options = {}) {
   }
   state.pendingAudioPolls[logId] = true;
   const autoPlay = Boolean(options.autoPlay);
+  let audioPlayed = false;
+  let videoPlayed = false;
   let attempt = 0;
-  const maxAttempts = 24;
+  const maxAttempts = 60;
 
   while (attempt < maxAttempts) {
     attempt += 1;
     try {
       const data = await apiFetch(`/api/chat/audio/${logId}`);
       updateAnswerAudioUi(logId, data);
-      if (data.audio_status === "ready" && data.audio_url) {
-        delete state.pendingAudioPolls[logId];
-        if (autoPlay) {
-          playAudio(data.audio_url);
+      if (data.video_status === "ready" && data.video_url) {
+        if (autoPlay && !videoPlayed) {
+          videoPlayed = true;
+          playDigitalVideo(videoPlaybackUrl(data), data.audio_url || "");
         }
+        delete state.pendingAudioPolls[logId];
         return;
+      }
+      if (data.audio_status === "ready" && data.audio_url) {
+        const shouldWaitForVideo = state.avatarOnlyEnabled && ["pending", "waiting_audio"].includes(data.video_status || "");
+        if (autoPlay && !audioPlayed && !shouldWaitForVideo) {
+          audioPlayed = true;
+          playAudio(data.audio_url, data);
+        }
+        if (!["pending", "waiting_audio"].includes(data.video_status || "")) {
+          delete state.pendingAudioPolls[logId];
+          return;
+        }
       }
       if (data.audio_status === "failed") {
         delete state.pendingAudioPolls[logId];
@@ -1239,15 +1746,25 @@ async function requestServerAudioFallback(logId, options = {}) {
   try {
     const data = await apiFetch(`/api/chat/audio/${logId}/request`, { method: "POST" });
     updateAnswerAudioUi(logId, data);
-    if (data.audio_status === "ready" && data.audio_url) {
+    if (data.video_status === "ready" && data.video_url) {
       if (options.autoPlay) {
-        playAudio(data.audio_url);
+        playDigitalVideo(videoPlaybackUrl(data), data.audio_url || "");
+      }
+      return;
+    }
+    if (data.audio_status === "ready" && data.audio_url) {
+      const shouldWaitForVideo = state.avatarOnlyEnabled && ["pending", "waiting_audio"].includes(data.video_status || "");
+      if (options.autoPlay && !shouldWaitForVideo) {
+        playAudio(data.audio_url, data);
+      }
+      if (shouldWaitForVideo) {
+        pollAnswerAudio(logId, { autoPlay: Boolean(options.autoPlay) });
       }
       return;
     }
     pollAnswerAudio(logId, { autoPlay: Boolean(options.autoPlay) });
   } catch (error) {
-    showToast(`语音回退失败：${error.message}`, "error");
+    showToast(`璇煶鍥為€€澶辫触锛?{error.message}`, "error");
   } finally {
     delete state.pendingServerAudioRequests[logId];
   }
@@ -1282,6 +1799,7 @@ async function playLocalAnswer(data, options = {}) {
   utterance.onerror = () => {
     state.localSpeechUtterance = null;
     unmarkSpeaking();
+    showToast("本地朗读不可用，正在切换服务端语音。", "info");
     requestServerAudioFallback(data.log_id, options);
   };
 
@@ -1291,10 +1809,111 @@ async function playLocalAnswer(data, options = {}) {
 
   window.setTimeout(() => {
     if (state.localSpeechUtterance === utterance && !window.speechSynthesis.speaking) {
+      showToast("本地朗读启动较慢，正在切换服务端语音。", "info");
       requestServerAudioFallback(data.log_id, options);
     }
   }, 800);
   return true;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function waitForVideoCanPlay(url, timeoutMs = AVATAR_REVEAL_PRELOAD_MS) {
+  if (!url) {
+    return false;
+  }
+  return withTimeout(
+    new Promise((resolve) => {
+      const video = document.createElement("video");
+      let done = false;
+      const finish = (ready) => {
+        if (done) {
+          return;
+        }
+        done = true;
+        video.oncanplay = null;
+        video.onloadeddata = null;
+        video.onerror = null;
+        video.removeAttribute("src");
+        video.load();
+        resolve(Boolean(ready));
+      };
+      video.preload = "auto";
+      video.muted = true;
+      video.playsInline = true;
+      video.oncanplay = () => finish(true);
+      video.onloadeddata = () => finish(true);
+      video.onerror = () => finish(false);
+      video.src = resolveMediaUrl(url);
+      video.load();
+    }),
+    timeoutMs,
+    false
+  );
+}
+
+async function waitForAvatarVideoReady(data, loadingNode) {
+  if (!state.avatarOnlyEnabled || !data?.log_id) {
+    return data;
+  }
+
+  const startedAt = performance.now();
+  const minWaitUntil = startedAt + AVATAR_REVEAL_MIN_MS;
+  let latest = data;
+  setGuideState("正在思考", "正在为你组织导览讲解。");
+  setPetSpeech("正在思考");
+  setPetMode("thinking");
+  if (loadingNode) {
+    loadingNode.innerHTML = "正在思考...";
+  }
+
+  while (performance.now() - startedAt < AVATAR_REVEAL_MAX_MS) {
+    try {
+      latest = await apiFetch(`/api/chat/audio/${data.log_id}`);
+      updateAnswerAudioUi(data.log_id, latest);
+      if (latest.video_status === "ready" && latest.video_url) {
+        const playbackUrl = videoPlaybackUrl(latest);
+        await waitForVideoCanPlay(playbackUrl);
+        const remaining = minWaitUntil - performance.now();
+        if (remaining > 0) {
+          await sleep(remaining);
+        }
+        return { ...data, ...latest };
+      }
+      if (["timeout", "error", "failed"].includes(latest.video_status || "")) {
+        break;
+      }
+      if (latest.audio_status === "failed" && !["pending", "waiting_audio"].includes(latest.video_status || "")) {
+        break;
+      }
+    } catch {
+      break;
+    }
+    await sleep(AVATAR_REVEAL_POLL_MS);
+  }
+
+  const remaining = minWaitUntil - performance.now();
+  if (remaining > 0) {
+    await sleep(remaining);
+  }
+  return { ...data, ...latest };
+}
+
+async function revealAnswerWhenAvatarReady(data, loadingNode, options = {}) {
+  const finalData = await waitForAvatarVideoReady(data, loadingNode);
+  loadingNode?.remove();
+  renderAnswer(finalData, options);
+  if (
+    state.avatarOnlyEnabled &&
+    finalData?.log_id &&
+    !finalData.video_url &&
+    ["pending", "waiting_audio"].includes(finalData.video_status || "")
+  ) {
+    pollAnswerAudio(finalData.log_id, { autoPlay: true });
+  }
+  return finalData;
 }
 
 function renderAnswer(data, options = {}) {
@@ -1319,10 +1938,8 @@ function renderAnswer(data, options = {}) {
         ${translateDisabled ? 'disabled title="英文回答服务未配置"' : ""}
       >英文翻译</button>
     `;
+  const videoButton = renderVideoAction(data);
   const videoReady = data.video_url && data.video_status === "ready";
-  const videoButton = videoReady
-    ? `<button class="small-action" type="button" data-video-url="${escapeHtml(data.video_url)}" data-fallback-audio-url="${escapeHtml(data.audio_url || "")}">播放数字人视频</button>`
-    : "";
   const visionBlock = data.multimodal_source
     ? `
       <div class="vision-evidence">
@@ -1342,7 +1959,7 @@ function renderAnswer(data, options = {}) {
       <div class="answer-text">${escapeHtml(data.answer)}</div>
       ${transcriptBlock}
       <div class="message-actions">
-        ${videoButton}
+        <span data-video-action-slot="${data.log_id}">${videoButton}</span>
         <span data-audio-action-slot="${data.log_id}">${audioButton}</span>
         ${translateButton}
       </div>
@@ -1355,12 +1972,15 @@ function renderAnswer(data, options = {}) {
 
   setGuideState("已完成回答", data.interpreted_question || data.transcript || "欢迎继续提问");
   setPetMode("success");
+  const shouldWaitForAvatarVideo = state.avatarOnlyEnabled && ["pending", "waiting_audio"].includes(data.video_status || "");
   if (videoReady) {
-    playDigitalVideo(data.video_url, data.audio_url);
+    playDigitalVideo(videoPlaybackUrl(data), data.audio_url);
+  } else if (shouldWaitForAvatarVideo) {
+    pollAnswerAudio(data.log_id, { autoPlay: true });
   } else if (data.tts_mode_used === "browser_local") {
     playLocalAnswer(data, { autoPlay: true });
   } else if (data.audio_url) {
-    playAudio(data.audio_url);
+    playAudio(data.audio_url, data);
   } else if (data.audio_status === "pending") {
     pollAnswerAudio(data.log_id, { autoPlay: true });
   }
@@ -1386,8 +2006,7 @@ async function askText(question) {
       method: "POST",
       body: JSON.stringify({ question: trimmed, user_id: "web-visitor", tts_mode: preferredTtsMode() }),
     });
-    loading.remove();
-    renderAnswer(data);
+    await revealAnswerWhenAvatarReady(data, loading);
     loadAdminData({ silent: true });
   } catch (error) {
     loading.remove();
@@ -1460,8 +2079,7 @@ async function sendVoice(blob, filename = "visitor-question.webm") {
       method: "POST",
       body: formData,
     });
-    loading.remove();
-    renderAnswer(data, { showTranscript: true });
+    await revealAnswerWhenAvatarReady(data, loading, { showTranscript: true });
     loadAdminData({ silent: true });
   } catch (error) {
     loading.remove();
@@ -1509,8 +2127,7 @@ async function sendImage(file) {
       method: "POST",
       body: formData,
     });
-    loading.remove();
-    renderAnswer(data, { showTranscript: true });
+    await revealAnswerWhenAvatarReady(data, loading, { showTranscript: true });
     loadAdminData({ silent: true });
   } catch (error) {
     loading.remove();
@@ -1561,7 +2178,7 @@ async function toggleRecording() {
   }
 }
 
-function playAudio(url) {
+async function playAudio(url, payload = {}) {
   if (!url) {
     showToast("这条回答没有可播放音频。", "error");
     return;
@@ -1573,7 +2190,15 @@ function playAudio(url) {
   const audio = new Audio(resolveMediaUrl(url));
   audio.crossOrigin = "anonymous";
   state.audio = audio;
-  audio.addEventListener("play", () => startAudioLipSync(audio));
+  let cues = null;
+  if (payload?.lipsync_url) {
+    cues = await withTimeout(loadMouthCues(payload.lipsync_url), 700, null);
+  }
+  audio.addEventListener("play", () => {
+    if (!startCueLipSync(audio, cues)) {
+      startAudioLipSync(audio);
+    }
+  });
   audio.addEventListener("ended", unmarkSpeaking);
   audio.addEventListener("pause", unmarkSpeaking);
   audio.play().catch((error) => {
@@ -1593,6 +2218,7 @@ function playDigitalVideo(url, fallbackAudioUrl = "") {
   stopLocalSpeech();
   stopAudioPlayback();
   stopVideoPlayback();
+  pauseAvatarStandbyLoop();
 
   const player = elements.digitalVideoPlayer;
   state.video = player;
@@ -1612,28 +2238,20 @@ function playDigitalVideo(url, fallbackAudioUrl = "") {
     unmarkSpeaking();
   };
   player.onerror = () => {
-    stopVideoPlayback();
     unmarkSpeaking();
-    if (fallbackAudioUrl) {
-      setGuideState("切换语音讲解", state.digitalHuman?.fallback_message || "数字人视频暂不可用，已切换为语音讲解。");
-      playAudio(fallbackAudioUrl);
-    } else {
-      showToast(state.digitalHuman?.fallback_message || "数字人视频播放失败。", "error");
-    }
+    stopVideoPlayback();
+    setGuideState("视频暂不可用", state.digitalHuman?.fallback_message || "数字人视频暂不可用，可点击语音播放继续听讲解。");
+    showToast(state.digitalHuman?.fallback_message || "数字人视频播放失败，可点击语音播放。", "error");
   };
   elements.avatarFrame.classList.add("video-active");
   setGuideState("正在播报", "数字人正在播放视频讲解。");
   setPetSpeech("视频讲解中");
 
   player.play().catch((error) => {
-    stopVideoPlayback();
     unmarkSpeaking();
-    if (fallbackAudioUrl) {
-      setGuideState("切换语音讲解", state.digitalHuman?.fallback_message || "数字人视频暂不可用，已切换为语音讲解。");
-      playAudio(fallbackAudioUrl);
-    } else {
-      showToast(`数字人视频播放失败：${error.message}`, "error");
-    }
+    elements.avatarFrame.classList.add("video-active");
+    setGuideState("数字人讲解已就绪", "如果浏览器阻止自动播放，请在舞台视频控件中手动点击播放。");
+    showToast(`已生成数字人讲解，请点击视频控件播放。${error.message ? `（${error.message}）` : ""}`, "info");
   });
 }
 
@@ -1660,6 +2278,7 @@ function stopVideoPlayback() {
   }
   state.video = null;
   elements.avatarFrame.classList.remove("video-active");
+  startAvatarStandbyLoop();
 }
 
 function markSpeaking() {
@@ -1764,14 +2383,14 @@ async function toggleTranslation(button) {
   if (state.answerTranslations[cacheKey]) {
     slot.innerHTML = renderTranslationBlock(state.answerTranslations[cacheKey], targetLanguage);
     button.dataset.expanded = "true";
-    button.textContent = targetLanguage === "en" ? "收起英文" : "收起";
+    button.textContent = targetLanguage === "en" ? "鏀惰捣鑻辨枃" : "鏀惰捣";
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
     return;
   }
 
   const originalLabel = button.textContent;
   button.disabled = true;
-  button.textContent = "翻译中...";
+  button.textContent = "缈昏瘧涓?..";
   try {
     const data = await apiFetch("/api/chat/translate", {
       method: "POST",
@@ -1787,7 +2406,7 @@ async function toggleTranslation(button) {
     };
     slot.innerHTML = renderTranslationBlock(state.answerTranslations[cacheKey], targetLanguage);
     button.dataset.expanded = "true";
-    button.textContent = targetLanguage === "en" ? "收起英文" : "收起";
+    button.textContent = targetLanguage === "en" ? "鏀惰捣鑻辨枃" : "鏀惰捣";
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
   } catch (error) {
     button.textContent = originalLabel;
@@ -1810,7 +2429,7 @@ async function loginAdmin() {
     localStorage.setItem("scenic_admin_token", data.token);
     elements.loginPanel.classList.add("hidden");
     elements.adminWorkspace.classList.remove("hidden");
-    showToast(`欢迎，${data.display_name}`);
+    showToast(`娆㈣繋锛?{data.display_name}`);
     await loadAdminData();
   } catch (error) {
     showToast(error.message, "error");
@@ -2054,7 +2673,7 @@ function renderEmotionTrend(items) {
       return `
         <div class="trend-item">
           <span>${escapeHtml(item.date.slice(5))}</span>
-          <div class="trend-track" title="积极 ${item.positive} / 中性 ${item.neutral} / 消极 ${item.negative}">
+          <div class="trend-track" title="绉瀬 ${item.positive} / 涓€?${item.neutral} / 娑堟瀬 ${item.negative}">
             <i style="width:${width}%"></i>
           </div>
           <strong>${total}</strong>
@@ -2066,7 +2685,7 @@ function renderEmotionTrend(items) {
 
 function renderServiceSuggestions(items) {
   if (!items.length) {
-    elements.serviceSuggestionsList.innerHTML = "<li>暂无建议。</li>";
+    elements.serviceSuggestionsList.innerHTML = "<li>鏆傛棤寤鸿銆?/li>";
     return;
   }
 
@@ -2075,7 +2694,7 @@ function renderServiceSuggestions(items) {
 
 function renderLogs(logs = []) {
   if (!logs.length) {
-    elements.logsTableBody.innerHTML = `<tr><td colspan="8">暂无问答日志。</td></tr>`;
+    elements.logsTableBody.innerHTML = `<tr><td colspan="8">鏆傛棤闂瓟鏃ュ織銆?/td></tr>`;
     return;
   }
 
@@ -2084,13 +2703,13 @@ function renderLogs(logs = []) {
       (item) => `
         <tr title="${escapeHtml(item.answer)}">
           <td data-label="ID">${item.id}</td>
-          <td data-label="用户">${escapeHtml(item.user_id)}</td>
-          <td data-label="问题">${escapeHtml(item.question)}</td>
-          <td data-label="情绪">${escapeHtml(item.emotion)}</td>
-          <td data-label="评分">${item.satisfaction ?? "-"}</td>
-          <td data-label="耗时">${Number(item.response_seconds || 0).toFixed(2)}s</td>
-          <td data-label="语音">${escapeHtml(item.audio_status || "pending")}</td>
-          <td data-label="时间">${formatTime(item.created_at)}</td>
+          <td data-label="鐢ㄦ埛">${escapeHtml(item.user_id)}</td>
+          <td data-label="闂">${escapeHtml(item.question)}</td>
+          <td data-label="鎯呯华">${escapeHtml(item.emotion)}</td>
+          <td data-label="璇勫垎">${item.satisfaction ?? "-"}</td>
+          <td data-label="鑰楁椂">${Number(item.response_seconds || 0).toFixed(2)}s</td>
+          <td data-label="璇煶">${escapeHtml(item.audio_status || "pending")}</td>
+          <td data-label="鏃堕棿">${formatTime(item.created_at)}</td>
         </tr>
       `
     )
@@ -2474,7 +3093,9 @@ function bindEvents() {
 
     const audioButton = event.target.closest("[data-audio-url]");
     if (audioButton) {
-      playAudio(audioButton.dataset.audioUrl);
+      const messageNode = audioButton.closest(".message[data-log-id]");
+      const payload = messageNode ? state.answerPayloads[messageNode.dataset.logId] : {};
+      playAudio(audioButton.dataset.audioUrl, payload || {});
       return;
     }
 
@@ -2508,6 +3129,10 @@ function bindEvents() {
   elements.refreshVideoStatusButton.addEventListener("click", () => loadDigitalVideoStatus({ silent: false }));
   elements.rebuildRagButton.addEventListener("click", rebuildRagIndex);
   elements.runEvaluationButton?.addEventListener("click", runEvaluation);
+  elements.openAvatarToggleButton?.addEventListener("click", toggleOpenAvatarLayer);
+  elements.closeOpenAvatarButton?.addEventListener("click", closeOpenAvatarLayer);
+  elements.openAvatarFrame?.addEventListener("load", handleOpenAvatarFrameLoad);
+  window.addEventListener("message", handleOpenAvatarHealth);
 
   elements.uploadForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -2577,10 +3202,12 @@ async function boot() {
   syncAdminOnlyChrome();
   bindEvents();
   bindLicensedAvatarAsset();
+  bindAvatarStandbyVideo();
   applyGuideMode(state.guideMode);
   checkApiHealth();
-  await loadDigitalHumanConfig();
   await loadDigitalVideoStatus();
+  await loadDigitalHumanConfig();
+  await loadAiCapabilityStatus();
   const config = state.digitalHuman || {
     scenic_area: "灵山胜境",
     greeting: "当前示范景区为灵山胜境，已接入对应知识库、路线推荐与语音播报能力。",
