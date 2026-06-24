@@ -23,6 +23,7 @@ GENERIC_RECOMMEND_HINTS = ("景点推荐", "推荐景点", "推荐一下", "有�
 ROUTE_QUESTION_HINTS = ("半天", "全天", "一天", "路线", "线路", "怎么游", "怎么玩", "游览", "行程", "轻松", "不累", "逛一下", "逛逛")
 STRUCTURAL_NOISE_HINTS = ("字段规范", "字段说明", "数据集", "结构化数据", "景点ID", "具体位置", "景区名称、")
 KNOWLEDGE_GAP_MARKER = "知识库待补充"
+OUT_OF_SCOPE_MARKER = "超出当前景区知识库范围"
 PARKING_HINTS = ("停车", "停车场", "泊车", "停车位")
 TICKET_HINTS = ("门票", "票价", "购票", "预约", "入园")
 TRAFFIC_HINTS = ("怎么去", "怎么到", "交通", "接驳", "摆渡车", "公交", "地铁", "自驾")
@@ -47,6 +48,20 @@ BROKEN_SENTENCE_TAIL_PATTERN = re.compile(r"[，,、：:](?:地|位|坐|在|处|
 FIELD_PREFIX_PATTERN = re.compile(
     r"^(?:景点名称|景点类型|位置|地址|景区名称|介绍内容|详细介绍|文化内涵方面|文化内涵|游玩亮点|开放或演出信息|开放信息|演出信息)[:：]\s*"
 )
+WEATHER_HINTS = ("天气", "气温", "温度", "多少度", "几度", "下雨", "降雨", "降雪", "空气质量", "aqi", "穿衣", "紫外线", "台风", "雷阵雨", "风力", "风大")
+GENERAL_WEB_HINTS = ("新闻", "热搜", "股票", "股价", "基金", "汇率", "彩票", "电影票", "外卖", "菜谱", "红烧肉", "写代码", "数学题")
+EXTERNAL_PLACE_HINTS = (
+    "徐州", "南京", "苏州", "常州", "扬州", "镇江", "南通", "连云港", "盐城", "淮安", "泰州", "宿迁",
+    "北京", "上海", "杭州", "宁波", "合肥", "黄山", "武汉", "长沙", "成都", "重庆", "广州", "深圳", "西安",
+    "故宫", "长城", "颐和园", "外滩", "西湖", "迪士尼", "泰山", "华山", "兵马俑", "高家庄", "崇明",
+)
+CURRENT_SCENIC_ALIASES = ("灵山", "灵山胜境", "灵山大佛", "九龙灌浴", "灵山梵宫", "祥符禅寺", "五印坛城", "拈花湾", "无锡", "马山", "太湖")
+SCENIC_DOMAIN_HINTS = (
+    "景区", "景点", "导览", "讲解", "游客", "游玩", "游览", "参观", "路线", "线路", "行程",
+    "表演", "演出", "开放", "场次", "门票", "票价", "停车", "交通", "厕所", "洗手间", "餐饮",
+    "文化", "历史", "含义", "寓意", "象征", "特色", "看点", "亮点", "拍照", "礼仪", "祈福",
+)
+BASIC_CHAT_HINTS = ("你好", "您好", "嗨", "hello", "hi", "你是谁", "你叫什么", "谢谢", "感谢")
 
 
 def infer_emotion(text: str) -> str:
@@ -154,6 +169,74 @@ def match_spot(db: Session, question: str) -> ScenicSpot | None:
     for spot in spots:
         if spot.name in question:
             return spot
+    return None
+
+
+def current_scope_terms(db: Session, scenic_area: str) -> set[str]:
+    terms = {term for term in CURRENT_SCENIC_ALIASES if term}
+    if scenic_area:
+        terms.add(scenic_area)
+    for spot in db.execute(select(ScenicSpot)).scalars().all():
+        if spot.name:
+            terms.add(spot.name)
+        if spot.location:
+            for token in SPECIFIC_LOCATION_HINTS:
+                if token in spot.location:
+                    terms.add(token)
+    return terms
+
+
+def has_current_scope_signal(question: str, scope_terms: set[str]) -> bool:
+    return any(term and term in question for term in scope_terms)
+
+
+def is_basic_chat_question(question: str) -> bool:
+    normalized = question.strip().lower()
+    return bool(normalized) and any(token in normalized for token in BASIC_CHAT_HINTS)
+
+
+def is_realtime_external_question(question: str, scope_terms: set[str]) -> bool:
+    if has_current_scope_signal(question, scope_terms):
+        return False
+    return any(token in question for token in WEATHER_HINTS)
+
+
+def is_explicit_external_place_question(question: str, scope_terms: set[str]) -> bool:
+    if has_current_scope_signal(question, scope_terms):
+        return False
+    return any(token in question for token in EXTERNAL_PLACE_HINTS)
+
+
+def is_supported_scenic_domain_question(question: str, scope_terms: set[str]) -> bool:
+    if has_current_scope_signal(question, scope_terms):
+        return True
+    if is_basic_chat_question(question):
+        return True
+    if any(token in question for token in GENERAL_WEB_HINTS):
+        return False
+    if any(token in question for token in WEATHER_HINTS):
+        return False
+    if any(token in question for token in EXTERNAL_PLACE_HINTS):
+        return False
+    return any(token in question for token in SCENIC_DOMAIN_HINTS)
+
+
+def build_out_of_scope_answer(question: str, scenic_area: str, scope_terms: set[str]) -> str | None:
+    if is_realtime_external_question(question, scope_terms):
+        return (
+            f"抱歉，我当前只接入了{scenic_area or '当前景区'}本地知识库，"
+            "没有启用联网天气查询，所以无法准确回答这个城市的实时天气。"
+        )
+    if is_explicit_external_place_question(question, scope_terms):
+        return (
+            f"抱歉，我当前只接入了{scenic_area or '当前景区'}本地知识库，"
+            "没有查到你提到的外部城市或景区资料。"
+        )
+    if not is_supported_scenic_domain_question(question, scope_terms):
+        return (
+            f"抱歉，我当前主要负责{scenic_area or '当前景区'}导览讲解。"
+            "这个问题没有在当前景区知识库中查到可靠资料。"
+        )
     return None
 
 
@@ -851,8 +934,15 @@ def answer_question(
     digital_human = get_or_create_config(db)
     emotion = infer_emotion(question)
     answer_source = "local"
+    scope_terms = current_scope_terms(db, digital_human.scenic_area)
+    out_of_scope_answer = build_out_of_scope_answer(question, digital_human.scenic_area, scope_terms)
 
-    if is_etiquette_question(question):
+    if out_of_scope_answer:
+        references = []
+        reference_titles = [f"{OUT_OF_SCOPE_MARKER}:{digital_human.scenic_area or '当前景区'}"]
+        answer = out_of_scope_answer
+        answer_source = "out_of_scope"
+    elif is_etiquette_question(question):
         references: list[KnowledgeChunk] = []
         reference_titles = ["文化礼仪提示"]
         answer = format_etiquette_answer(digital_human.scenic_area)
