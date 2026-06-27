@@ -217,10 +217,37 @@ class AudioProviderTests(unittest.TestCase):
 
         spoken_text = build_spoken_answer_text(long_answer)
 
-        self.assertLessEqual(len(spoken_text), 121)
+        self.assertLessEqual(len(spoken_text), 360)
         self.assertIn("灵山胜境", spoken_text)
         self.assertNotIn("参考来源", spoken_text)
         self.assertTrue(spoken_text.endswith("。"))
+
+    def test_build_spoken_answer_text_keeps_short_route_answer_complete(self):
+        answer = (
+            "半天游览建议走：灵山大照壁 → 五明桥 → 菩提大道 → 九龙灌浴。"
+            "先看核心景点，演出和排队时间留出弹性；如果时间和体力还有余量，再补充周边点位。"
+        )
+
+        spoken_text = build_spoken_answer_text(answer)
+
+        self.assertIn("半天游览建议走", spoken_text)
+        self.assertIn("九龙灌浴", spoken_text)
+        self.assertNotIn("我只有半天时间", spoken_text)
+        self.assertLessEqual(len(spoken_text), 120)
+        self.assertTrue(spoken_text.endswith("。"))
+
+    def test_build_spoken_answer_text_prefers_image_guide_conclusion(self):
+        answer = (
+            "多模态识别：画面中可见大型露天佛像，整体轮廓与灵山胜境核心景观“灵山大佛”高度一致。"
+            "初步判断为“灵山大佛”。"
+            "灵山大佛的文化含义是：体现佛教慈悲、庄严和祈福文化，是灵山胜境的核心精神象征。"
+        )
+
+        spoken_text = build_spoken_answer_text(answer)
+
+        self.assertIn("灵山大佛的文化含义是", spoken_text)
+        self.assertNotIn("多模态识别", spoken_text)
+        self.assertLessEqual(len(spoken_text), 221)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ param(
     [string]$BaseUrl = "http://127.0.0.1:18085",
     [string]$OpenAvatarRoot = "D:\OpenAvatarChatLab\OpenAvatarChat",
     [int]$Port = 18085,
+    [double]$MaxAudioSeconds = 24,
     [switch]$Preload
 )
 
@@ -31,7 +32,7 @@ $LogDir = Join-Path (Split-Path -Parent $PSScriptRoot) "data\generated\logs"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $LogPath = Join-Path $LogDir "avatar_only_sidecar.log"
 
-$ArgsText = "-Port $Port"
+$ArgsText = "-Port $Port -MaxAudioSeconds $MaxAudioSeconds"
 if ($Preload) {
     $ArgsText += " -Preload"
 }

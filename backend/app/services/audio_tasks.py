@@ -13,7 +13,7 @@ from app.services.lipsync import generate_lipsync_for_audio
 
 
 SPOKEN_TEXT_MIN_CHARS = 80
-SPOKEN_TEXT_MAX_CHARS = 120
+SPOKEN_TEXT_MAX_CHARS = 360
 _SPOKEN_METADATA_HINTS = (
     "参考来源",
     "引用来源",
@@ -23,6 +23,65 @@ _SPOKEN_METADATA_HINTS = (
     "answer_source",
     "model_name",
 )
+
+
+def _prefer_guide_narration(text: str) -> str:
+    """For image answers, keep the actual guide explanation ahead of raw vision description."""
+    if "多模态识别：" not in text:
+        return text
+
+    candidates: list[str] = []
+    for marker in (
+        "的文化含义是：",
+        "的开放或演出时间是：",
+        "的参观亮点是：",
+        "位于",
+        "坐落",
+        "地处",
+    ):
+        index = text.find(marker)
+        if index < 0:
+            continue
+        start = index
+        while start > 0 and text[start - 1] not in "。！？!?；;\n":
+            start -= 1
+        candidates.append(text[start:].strip())
+
+    if candidates:
+        return min(candidates, key=len)
+
+    marker = "初步判断为"
+    index = text.find(marker)
+    if index >= 0:
+        end = text.find("。", index)
+        if end >= 0:
+            return text[end + 1 :].strip() or text
+    return text
+
+
+def _safe_spoken_cut(text: str, max_chars: int = SPOKEN_TEXT_MAX_CHARS) -> str:
+    if len(text) <= max_chars:
+        return text.strip()
+
+    window = text[:max_chars]
+    cut_at = -1
+    for mark in ("。", "！", "？", "；", ";"):
+        cut_at = max(cut_at, window.rfind(mark))
+    if cut_at < SPOKEN_TEXT_MIN_CHARS:
+        for mark in ("，", "、", ","):
+            cut_at = max(cut_at, window.rfind(mark))
+    selected = window[: cut_at + 1] if cut_at >= SPOKEN_TEXT_MIN_CHARS else window
+
+    quote_marks = "“”‘’\"'"
+    if sum(1 for char in selected if char in quote_marks) % 2 == 1:
+        last_quote = max(selected.rfind(mark) for mark in quote_marks)
+        if last_quote >= SPOKEN_TEXT_MIN_CHARS:
+            selected = selected[:last_quote]
+
+    selected = selected.strip(" ，,；;、")
+    if selected and selected[-1] not in "。！？!?":
+        selected = f"{selected}。"
+    return selected
 
 
 def build_spoken_answer_text(answer: str) -> str:
@@ -39,6 +98,7 @@ def build_spoken_answer_text(answer: str) -> str:
         lines.append(line)
 
     text = re.sub(r"\s+", " ", " ".join(lines)).strip()
+    text = _prefer_guide_narration(text)
     if not text:
         return ""
     if len(text) <= SPOKEN_TEXT_MAX_CHARS:
@@ -55,15 +115,9 @@ def build_spoken_answer_text(answer: str) -> str:
             break
 
     if not selected:
-        selected = text[:SPOKEN_TEXT_MAX_CHARS]
-        cut_at = max(selected.rfind(mark) for mark in ("，", "、", "；", "。", ",", ";"))
-        if cut_at >= SPOKEN_TEXT_MIN_CHARS:
-            selected = selected[: cut_at + 1]
+        return _safe_spoken_cut(text)
 
-    selected = selected.strip(" ，,；;、")
-    if selected and selected[-1] not in "。！？!?":
-        selected = f"{selected}。"
-    return selected
+    return _safe_spoken_cut(selected)
 
 
 def queue_answer_audio(log_id: int, text: str, voice_name: str | None = None) -> None:
@@ -160,7 +214,7 @@ def _build_answer_audio(log_id: int, text: str, voice_name: str | None = None) -
         db.commit()
         if audio_url:
             generate_lipsync_for_audio(audio_url)
-            _build_answer_video(log.id, log.answer, audio_url)
+            _build_answer_video(log.id, spoken_text, audio_url)
     finally:
         db.close()
 

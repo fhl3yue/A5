@@ -14,6 +14,7 @@ class ChatData(BaseModel):
     transcript: str | None = None
     interpreted_question: str | None = None
     answer: str
+    spoken_text: str = ""
     audio_url: str | None = None
     audio_status: str = "pending"
     english_available: bool = False
@@ -113,6 +114,7 @@ class SimpleResponse(BaseModel):
 class KnowledgeDocumentItem(BaseModel):
     id: int
     name: str
+    display_name: str = ""
     source: str
     status: str
     content_type: str

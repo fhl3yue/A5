@@ -299,11 +299,11 @@ def build_route_answer(db: Session, question: str, scenic_area: str, user_id: st
     if not spots:
         return build_spot_recommendation(db, scenic_area)
 
-    matched_interest = route_data.get("matched_interest") or "综合游览"
+    spots_text = " → ".join(spots)
     answer = (
-        f"如果你计划在{scenic_area or '当前景区'}游览{duration}，建议走“{' → '.join(spots)}”。"
-        f"这条路线叫“{route_data.get('route_name', '推荐路线')}”，按“{matched_interest}”偏好推荐，{route_data.get('reason', '')}"
-        "建议把演出时间和现场排队情况留出弹性，先看核心景点，再根据体力补充周边点位。"
+        f"{duration}游览建议走：{spots_text}。"
+        "先看核心景点，演出和排队时间留出弹性；"
+        "如果时间和体力还有余量，再补充周边点位。"
     )
     return answer, spots
 

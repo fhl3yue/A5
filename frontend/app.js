@@ -868,12 +868,12 @@ function applyGuideMode(mode, { autofill = false } = {}) {
 
 function voiceLabel(voiceName) {
   const labels = {
-    "zh-CN-XiaoxiaoNeural": "鏅撴檽濂冲０",
-    "zh-CN-YunxiNeural": "浜戝笇鐢峰０",
-    "zh-CN-XiaoyiNeural": "鏅撲紛濂冲０",
-    "zh-CN-YunjianNeural": "浜戝仴鐢峰０",
+    "zh-CN-XiaoxiaoNeural": "\u6653\u6653\u5973\u58f0",
+    "zh-CN-YunxiNeural": "\u4e91\u5e0c\u7537\u58f0",
+    "zh-CN-XiaoyiNeural": "\u6653\u4f0a\u5973\u58f0",
+    "zh-CN-YunjianNeural": "\u4e91\u5065\u7537\u58f0",
   };
-  return labels[voiceName] || voiceName || "涓枃澹扮嚎";
+  return labels[voiceName] || voiceName || "\u9ed8\u8ba4\u8bb2\u89e3\u97f3\u8272";
 }
 
 function looksLikeGarbledName(value) {
@@ -881,16 +881,27 @@ function looksLikeGarbledName(value) {
 }
 
 function docDisplayName(doc) {
-  if (!looksLikeGarbledName(doc.name)) {
-    return doc.name;
+  if (doc && doc.display_name) {
+    return doc.display_name;
   }
-  if (doc.content_type === "xlsx") {
-    return "瀹樻柟娓稿琛屼负鏁版嵁.xlsx";
+  const rawName = doc?.name || "";
+  const rawLooksGarbled = looksLikeGarbledName(rawName) || /[\u2500-\u257F]/.test(rawName);
+  if (rawName === "sample_scenic_spots") {
+    return "\u793a\u4f8b\u666f\u70b9\u77e5\u8bc6\u5e93";
   }
-  if (doc.chunk_count >= 50) {
-    return "瀹樻柟鏅尯鏂囨梾璧勬枡.docx";
+  if (rawLooksGarbled) {
+    if (doc.content_type === "xlsx") {
+      return "\u666f\u533a\u65c5\u6e38\u6570\u636e\u4e0e\u884c\u4e3a\u5206\u6790\u6570\u636e.xlsx";
+    }
+    if (doc.content_type === "docx" && Number(doc.chunk_count) >= 50) {
+      return "\u7075\u5c71\u80dc\u5883\u5386\u53f2\u6587\u5316\u4e0e\u4e2a\u6027\u5316\u6e38\u89c8\u6307\u5357.docx";
+    }
+    if (doc.content_type === "docx") {
+      return "\u7075\u5c71\u80dc\u5883\u666f\u70b9\u7ed3\u6784\u5316\u6570\u636e\u96c6.docx";
+    }
+    return "\u7075\u5c71\u80dc\u5883\u77e5\u8bc6\u6587\u6863";
   }
-  return "瀹樻柟鏅尯缁撴瀯璧勬枡.docx";
+  return rawName;
 }
 
 function themeClass(outfitTheme) {
@@ -1785,7 +1796,7 @@ async function playLocalAnswer(data, options = {}) {
     return false;
   }
 
-  const utterance = new SpeechSynthesisUtterance(data.answer);
+  const utterance = new SpeechSynthesisUtterance(data.spoken_text || data.answer);
   utterance.lang = voice.lang || "zh-CN";
   utterance.voice = voice;
   utterance.rate = 1;
@@ -2371,26 +2382,30 @@ async function toggleTranslation(button) {
     return;
   }
 
+  const labelTranslate = targetLanguage === "en" ? "\u82f1\u6587\u7ffb\u8bd1" : targetLanguage;
+  const labelCollapse = targetLanguage === "en" ? "\u6536\u8d77\u82f1\u6587" : "\u6536\u8d77";
+  const labelLoading = targetLanguage === "en" ? "\u6b63\u5728\u7ffb\u8bd1..." : "\u6b63\u5728\u5904\u7406...";
+
   const cacheKey = `${logId}:${targetLanguage}`;
   const expanded = button.dataset.expanded === "true";
   if (expanded) {
     slot.innerHTML = "";
     button.dataset.expanded = "false";
-    button.textContent = targetLanguage === "en" ? "英文翻译" : targetLanguage;
+    button.textContent = labelTranslate;
     return;
   }
 
   if (state.answerTranslations[cacheKey]) {
     slot.innerHTML = renderTranslationBlock(state.answerTranslations[cacheKey], targetLanguage);
     button.dataset.expanded = "true";
-    button.textContent = targetLanguage === "en" ? "鏀惰捣鑻辨枃" : "鏀惰捣";
+    button.textContent = labelCollapse;
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
     return;
   }
 
-  const originalLabel = button.textContent;
+  const originalLabel = button.textContent || labelTranslate;
   button.disabled = true;
-  button.textContent = "缈昏瘧涓?..";
+  button.textContent = labelLoading;
   try {
     const data = await apiFetch("/api/chat/translate", {
       method: "POST",
@@ -2406,7 +2421,7 @@ async function toggleTranslation(button) {
     };
     slot.innerHTML = renderTranslationBlock(state.answerTranslations[cacheKey], targetLanguage);
     button.dataset.expanded = "true";
-    button.textContent = targetLanguage === "en" ? "鏀惰捣鑻辨枃" : "鏀惰捣";
+    button.textContent = labelCollapse;
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
   } catch (error) {
     button.textContent = originalLabel;

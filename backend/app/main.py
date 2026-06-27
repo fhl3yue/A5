@@ -58,7 +58,7 @@ from app.schemas import (
 )
 from app.services.analytics import build_dashboard, build_visitor_report
 from app.services.ai_status import build_ai_status
-from app.services.audio_tasks import get_audio_status, request_answer_audio
+from app.services.audio_tasks import build_spoken_answer_text, get_audio_status, request_answer_audio
 from app.services.chat import answer_question, build_translation_result
 from app.services.digital_human import get_or_create_config, serialize_config, update_config
 from app.services.digital_video import get_digital_video_status
@@ -117,6 +117,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def prevent_frontend_cache(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/app"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 app.mount("/generated/audio", StaticFiles(directory=settings.audio_output_dir), name="generated-audio")
 app.mount("/generated/lipsync", StaticFiles(directory=settings.lipsync_output_dir), name="generated-lipsync")
 app.mount("/generated/avatar", StaticFiles(directory=settings.avatar_output_dir), name="generated-avatar")
@@ -128,6 +140,37 @@ if frontend_dir.exists():
 ALLOWED_AVATAR_SUFFIXES = {".png", ".webp", ".avif", ".gif", ".jpg", ".jpeg"}
 
 
+def looks_like_garbled_document_name(value: str) -> bool:
+    if not value:
+        return False
+    suspicious_count = sum(
+        1
+        for char in value
+        if "\u2500" <= char <= "\u257f"
+        or "\ue000" <= char <= "\uf8ff"
+        or ord(char) < 32
+        or char in {"�", "?", "╩", "╛", "╜", "╔", "╟", "┴", "Θ", "└"}
+    )
+    chinese_count = sum(1 for char in value if "\u4e00" <= char <= "\u9fff")
+    return suspicious_count >= 2 or (suspicious_count > 0 and chinese_count == 0)
+
+
+def readable_document_name(document: KnowledgeDocument, chunk_count: int) -> str:
+    """Return a visitor/admin friendly display name without changing DB keys."""
+    raw_name = document.name or ""
+    if raw_name == "sample_scenic_spots":
+        return "示例景点知识库"
+    if not looks_like_garbled_document_name(raw_name):
+        return raw_name
+    if document.content_type == "xlsx":
+        return "景区旅游数据与行为分析数据.xlsx"
+    if document.content_type == "docx" and chunk_count >= 50:
+        return "灵山胜境历史文化与个性化游览指南.docx"
+    if document.content_type == "docx":
+        return "灵山胜境景点结构化数据集.docx"
+    return f"灵山胜境知识文档.{document.content_type or 'txt'}"
+
+
 def document_to_item(db: Session, document: KnowledgeDocument) -> KnowledgeDocumentItem:
     chunk_count = db.execute(
         select(func.count()).select_from(KnowledgeChunk).where(KnowledgeChunk.document_name == document.name)
@@ -135,6 +178,7 @@ def document_to_item(db: Session, document: KnowledgeDocument) -> KnowledgeDocum
     return KnowledgeDocumentItem(
         id=document.id,
         name=document.name,
+        display_name=readable_document_name(document, chunk_count),
         source=document.source,
         status=document.status,
         content_type=document.content_type,
@@ -225,6 +269,7 @@ def chat_text(payload: ChatRequest, db: Session = Depends(get_db)):
             transcript=payload.question,
             interpreted_question=payload.question,
             answer=result["answer"],
+            spoken_text=build_spoken_answer_text(result["answer"]),
             audio_url=result["audio_url"],
             audio_status=result["audio_status"],
             english_available=result["english_available"],
@@ -277,6 +322,7 @@ def chat_voice(
             transcript=derived_transcript,
             interpreted_question=interpreted_question,
             answer=result["answer"],
+            spoken_text=build_spoken_answer_text(result["answer"]),
             audio_url=result["audio_url"],
             audio_status=result["audio_status"],
             english_available=result["english_available"],
@@ -317,6 +363,7 @@ def chat_image(
             question=question.strip(),
             user_id=user_id,
             tts_mode=tts_mode,
+            filename=file.filename,
         )
     except VisionGuideError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -344,6 +391,7 @@ def chat_image(
             transcript=question.strip() or "图片识别导览",
             interpreted_question=interpreted_question,
             answer=result["answer"],
+            spoken_text=build_spoken_answer_text(result["answer"]),
             audio_url=result["audio_url"],
             audio_status=result["audio_status"],
             english_available=result["english_available"],

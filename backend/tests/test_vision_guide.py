@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 from app.config import settings
 from app.services.ai_status import build_ai_status
 from app.services.vision import (
+    analyze_image,
     _extract_message_text,
     build_vision_messages,
     call_vision_model,
@@ -11,6 +12,10 @@ from app.services.vision import (
     vision_model_configured,
     vision_model_display_name,
 )
+from app.database import Base
+from app.models import DigitalHumanConfig, ScenicSpot
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 
 class VisionGuideTests(unittest.TestCase):
@@ -100,6 +105,31 @@ class VisionGuideTests(unittest.TestCase):
         self.assertTrue(status["vision_enabled"])
         self.assertTrue(status["vision_configured"])
         self.assertEqual("GLM-4.5V", status["vision_model_name"])
+
+    def test_demo_filename_fast_matches_known_spot_without_model_call(self):
+        engine = create_engine("sqlite:///:memory:", future=True)
+        Base.metadata.create_all(engine)
+        SessionLocal = sessionmaker(bind=engine, future=True)
+        db = SessionLocal()
+        try:
+            db.add(DigitalHumanConfig(scenic_area="灵山胜境"))
+            db.add(ScenicSpot(spot_id="spot-lingshan-buddha", name="灵山大佛", location="无锡", description="灵山大佛"))
+            db.commit()
+
+            with patch("app.services.vision.call_vision_model") as model_call:
+                analysis = analyze_image(
+                    db,
+                    image_bytes=b"fake-image",
+                    mime_type="image/jpeg",
+                    question="这是哪里？",
+                    filename="灵山大佛示例图.jpg",
+                )
+
+            self.assertEqual("灵山大佛", analysis.matched_spot)
+            self.assertEqual("local_demo_fast_match", analysis.raw_text)
+            model_call.assert_not_called()
+        finally:
+            db.close()
 
 
 if __name__ == "__main__":

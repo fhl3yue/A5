@@ -63,6 +63,7 @@ function Ensure-AvatarOnlySidecar {
   }
 
   $BaseUrl = (Get-DotEnvValue "AVATAR_ONLY_BASE_URL" "http://127.0.0.1:18085").TrimEnd("/")
+  $MaxAudioSeconds = [double](Get-DotEnvValue "AVATAR_ONLY_MAX_AUDIO_SECONDS" "24")
   if (Test-HttpOk "$BaseUrl/health" 3) {
     Write-Host "LiteAvatar avatar-only sidecar is ready: $BaseUrl" -ForegroundColor Green
     return
@@ -91,7 +92,7 @@ function Ensure-AvatarOnlySidecar {
   $LogPath = Join-Path $LogDir "avatar_only_sidecar.log"
 
   Write-Host "Starting LiteAvatar avatar-only sidecar on $BaseUrl ..." -ForegroundColor Cyan
-  $Command = ". '$StartScript' -Port $Port -Preload *>&1 | Tee-Object -FilePath '$LogPath'"
+  $Command = ". '$StartScript' -Port $Port -Preload -MaxAudioSeconds $MaxAudioSeconds *>&1 | Tee-Object -FilePath '$LogPath'"
   Start-Process -FilePath powershell.exe `
     -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $Command) `
     -WorkingDirectory $OpenAvatarRoot `
